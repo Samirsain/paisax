@@ -1,0 +1,575 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T00:00:00Z",
+  "title": "Design System: DailyEarn",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Stitch Indigo",
+        "tonalRamp": [
+          "#07006c",
+          "#1e1a9e",
+          "#2f2fbd",
+          "#4648d4",
+          "#6063ee",
+          "#8083ff",
+          "#c0c1ff",
+          "#e1e0ff"
+        ]
+      },
+      "primary-container": {
+        "role": "primary",
+        "displayName": "Bright Indigo",
+        "tonalRamp": [
+          "#07006c",
+          "#1e1a9e",
+          "#2f2fbd",
+          "#4648d4",
+          "#6063ee",
+          "#8083ff",
+          "#c0c1ff",
+          "#e1e0ff"
+        ]
+      },
+      "primary-fixed": {
+        "role": "primary",
+        "displayName": "Indigo Mist",
+        "tonalRamp": [
+          "#07006c",
+          "#1e1a9e",
+          "#2f2fbd",
+          "#4648d4",
+          "#6063ee",
+          "#8083ff",
+          "#c0c1ff",
+          "#e1e0ff"
+        ]
+      },
+      "claim": {
+        "role": "secondary",
+        "displayName": "Claim Emerald",
+        "tonalRamp": [
+          "#002113",
+          "#003825",
+          "#005236",
+          "#006c49",
+          "#00714d",
+          "#4edea3",
+          "#6cf8bb",
+          "#c8ffe0"
+        ]
+      },
+      "claim-hover": {
+        "role": "secondary",
+        "displayName": "Deep Emerald",
+        "tonalRamp": [
+          "#002113",
+          "#003825",
+          "#005236",
+          "#006c49",
+          "#00714d",
+          "#4edea3",
+          "#6cf8bb",
+          "#c8ffe0"
+        ]
+      },
+      "mint": {
+        "role": "secondary",
+        "displayName": "Fresh Mint",
+        "tonalRamp": [
+          "#002113",
+          "#003825",
+          "#005236",
+          "#006c49",
+          "#00714d",
+          "#4edea3",
+          "#6cf8bb",
+          "#c8ffe0"
+        ]
+      },
+      "on-mint": {
+        "role": "secondary",
+        "displayName": "Mint Ink",
+        "tonalRamp": [
+          "#002113",
+          "#003825",
+          "#005236",
+          "#006c49",
+          "#00714d",
+          "#4edea3",
+          "#6cf8bb",
+          "#c8ffe0"
+        ]
+      },
+      "amber": {
+        "role": "tertiary",
+        "displayName": "Harvest Amber",
+        "tonalRamp": [
+          "#2a1700",
+          "#462a00",
+          "#653e00",
+          "#825100",
+          "#a36700",
+          "#d38a1c",
+          "#ffb95f",
+          "#ffddb8"
+        ]
+      },
+      "amber-soft": {
+        "role": "tertiary",
+        "displayName": "Apricot",
+        "tonalRamp": [
+          "#2a1700",
+          "#462a00",
+          "#653e00",
+          "#825100",
+          "#a36700",
+          "#d38a1c",
+          "#ffb95f",
+          "#ffddb8"
+        ]
+      },
+      "rose": {
+        "role": "tertiary",
+        "displayName": "Berry Rose",
+        "tonalRamp": [
+          "#3e0019",
+          "#650030",
+          "#800f3e",
+          "#9c1d50",
+          "#bd3768",
+          "#e05282",
+          "#ffb1c6",
+          "#ffd9e2"
+        ]
+      },
+      "rose-soft": {
+        "role": "tertiary",
+        "displayName": "Blush",
+        "tonalRamp": [
+          "#3e0019",
+          "#650030",
+          "#800f3e",
+          "#9c1d50",
+          "#bd3768",
+          "#e05282",
+          "#ffb1c6",
+          "#ffd9e2"
+        ]
+      },
+      "destructive": {
+        "role": "error",
+        "displayName": "Error Red",
+        "tonalRamp": [
+          "#410002",
+          "#690005",
+          "#93000a",
+          "#ba1a1a",
+          "#de3730",
+          "#ff5449",
+          "#ffb4ab",
+          "#ffdad6"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Lavender White",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "page-margin": {
+        "role": "neutral",
+        "displayName": "Periwinkle Margin",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card White",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "surface-low": {
+        "role": "neutral",
+        "displayName": "Surface Low",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "surface-mid": {
+        "role": "neutral",
+        "displayName": "Surface Mid",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "surface-high": {
+        "role": "neutral",
+        "displayName": "Surface High",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "on-surface": {
+        "role": "neutral",
+        "displayName": "Midnight Ink",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "on-variant": {
+        "role": "neutral",
+        "displayName": "Slate Ink",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "outline": {
+        "role": "neutral",
+        "displayName": "Outline",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "input": {
+        "role": "neutral",
+        "displayName": "Input",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "tonalRamp": [
+          "#131b2e",
+          "#283044",
+          "#464554",
+          "#767586",
+          "#c7c4d7",
+          "#e2e7ff",
+          "#f2f3ff",
+          "#faf8ff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The ready-to-claim count on Home; one per screen."
+      },
+      "stat": {
+        "displayName": "Stat",
+        "purpose": "Card figures: balance, lifetime, balance after."
+      },
+      "headline-lg": {
+        "displayName": "Headline Lg",
+        "purpose": "Dialog and success titles."
+      },
+      "headline-md": {
+        "displayName": "Headline Md",
+        "purpose": "Screen greetings and section heads."
+      },
+      "headline-sm": {
+        "displayName": "Headline Sm",
+        "purpose": "Card titles, plan names, wordmark, sub-page titles."
+      },
+      "body-lg": {
+        "displayName": "Body Lg",
+        "purpose": "Lead descriptions."
+      },
+      "body-md": {
+        "displayName": "Body Md",
+        "purpose": "Descriptions and list secondary lines."
+      },
+      "body-sm": {
+        "displayName": "Body Sm",
+        "purpose": "Timestamps and fine print."
+      },
+      "label-lg": {
+        "displayName": "Label Lg",
+        "purpose": "Button text and emphasized row labels."
+      },
+      "label-md": {
+        "displayName": "Label Md",
+        "purpose": "Chips and progress labels."
+      },
+      "label-sm": {
+        "displayName": "Label Sm",
+        "purpose": "Stat captions and tab labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 2px rgb(19 27 46 / 0.04), 0 4px 12px -2px rgb(19 27 46 / 0.06)",
+        "purpose": "Every white card at rest."
+      },
+      {
+        "name": "hero",
+        "value": "0 20px 25px -5px rgb(0 108 73 / 0.06), 0 8px 10px -6px rgb(0 108 73 / 0.05)",
+        "purpose": "The claim card only; emerald-tinted."
+      },
+      {
+        "name": "lift",
+        "value": "0 -8px 24px -8px rgb(19 27 46 / 0.16)",
+        "purpose": "Bottom sheets and dialogs."
+      },
+      {
+        "name": "indigo-glow",
+        "value": "0 10px 15px -3px rgb(70 72 212 / 0.25), 0 4px 6px -4px rgb(70 72 212 / 0.25)",
+        "purpose": "Under indigo-gradient summary cards."
+      },
+      {
+        "name": "toast",
+        "value": "0 10px 28px -10px rgb(19 27 46 / 0.3)",
+        "purpose": "Toast card above the tab bar."
+      },
+      {
+        "name": "scrim",
+        "value": "rgb(15 23 42 / 0.4)",
+        "purpose": "The one overlay scrim (slate-900/40), no blur."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Rise, level-flip, fill-bar, burst."
+      },
+      {
+        "name": "pop-in",
+        "value": "700ms cubic-bezier(0.2, 0.9, 0.3, 1) 120ms",
+        "purpose": "Trophy and success check overshoot."
+      },
+      {
+        "name": "rise",
+        "value": "500ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Staggered celebration text."
+      },
+      {
+        "name": "fill-bar",
+        "value": "900ms cubic-bezier(0.16, 1, 0.3, 1) 450ms",
+        "purpose": "Level bar fill."
+      },
+      {
+        "name": "sheet",
+        "value": "300ms ease-out",
+        "purpose": "Bottom sheet slides from the bottom edge."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none",
+        "purpose": "All celebration classes disabled; sparks hidden."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "column",
+        "value": "448px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Claim Button",
+      "kind": "button",
+      "refersTo": "button-claim",
+      "description": "Full-width xl emerald button; used only for claiming.",
+      "html": "<button class=\"ds-btn-claim\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\"/></svg> Claim 67 coins</button>",
+      "css": ".ds-btn-claim { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 12px; font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0.01em; cursor: pointer; transition: all 0.15s; font-family: Inter, ui-sans-serif, system-ui, sans-serif; height: 52px; padding: 0 20px; width: 100%; max-width: 358px; background: #006c49; color: #fff; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); } .ds-btn-claim:hover { background: #005236; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); } .ds-btn-claim:active { transform: scale(0.98); } .ds-btn-claim:focus-visible { outline: 2px solid #4648d4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Buy Button",
+      "kind": "button",
+      "refersTo": "button-buy",
+      "description": "Indigo primary for buying, sharing and continuing.",
+      "html": "<button class=\"ds-btn-buy\">Confirm · spend 600 coins</button>",
+      "css": ".ds-btn-buy { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 12px; font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0.01em; cursor: pointer; transition: all 0.15s; font-family: Inter, ui-sans-serif, system-ui, sans-serif; height: 52px; padding: 0 20px; background: #4648d4; color: #fff; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); } .ds-btn-buy:hover { background: #3a3cc0; } .ds-btn-buy:active { transform: scale(0.98); } .ds-btn-buy:focus-visible { outline: 2px solid #4648d4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Soft Button",
+      "kind": "button",
+      "refersTo": "button-soft",
+      "description": "Tonal secondary choice inside sheets.",
+      "html": "<button class=\"ds-btn-soft\">Go to Home</button>",
+      "css": ".ds-btn-soft { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 12px; font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0.01em; cursor: pointer; transition: all 0.15s; font-family: Inter, ui-sans-serif, system-ui, sans-serif; height: 44px; padding: 0 16px; background: #eaedff; color: #464554; } .ds-btn-soft:hover { background: #e2e7ff; } .ds-btn-soft:focus-visible { outline: 2px solid #4648d4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Chips",
+      "kind": "chip",
+      "refersTo": "chip-mint",
+      "description": "Pill chips: a word plus a dot or icon, tinted by tone.",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip ds-chip-mint\"><i></i>Claimed</span><span class=\"ds-chip ds-chip-amber\">Ready</span><span class=\"ds-chip ds-chip-indigo\">Level 3</span><span class=\"ds-chip ds-chip-neutral\">Demo</span></div>",
+      "css": ".ds-chips { display: flex; gap: 8px; flex-wrap: wrap; } .ds-chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; padding: 4px 10px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.02em; font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-chip i { width: 6px; height: 6px; border-radius: 9999px; background: currentColor; } .ds-chip-mint { background: rgb(108 248 187 / 0.3); color: #00714d; } .ds-chip-amber { background: #ffddb8; color: #825100; } .ds-chip-indigo { background: #e1e0ff; color: #4648d4; } .ds-chip-neutral { background: #e2e7ff; color: #464554; }"
+    },
+    {
+      "name": "Plan Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Borderless white card with a plan tile, status chip and progress.",
+      "html": "<a class=\"ds-card\" href=\"#\"><div class=\"ds-row\"><span class=\"ds-tile\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z\"/><path d=\"m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z\"/><path d=\"M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0\"/><path d=\"M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5\"/></svg></span><div class=\"ds-grow\"><p class=\"ds-h\">Starter Plan</p><p class=\"ds-b\">Cost 300 · 25/day</p></div><span class=\"ds-chip-r\">Ready</span></div><div class=\"ds-lbl\"><span>Progress (40%)</span><span>Day 12 of 30</span></div><span class=\"ds-track\"><span style=\"width:40%\"></span></span></a>",
+      "css": ".ds-card { display: block; max-width: 358px; background: #fff; border-radius: 12px; padding: 16px; text-decoration: none; color: #131b2e; font-family: Inter, ui-sans-serif, system-ui, sans-serif; box-shadow: 0 1px 2px rgb(19 27 46 / 0.04), 0 4px 12px -2px rgb(19 27 46 / 0.06); transition: box-shadow 0.15s; } .ds-card:hover { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); } .ds-card:focus-visible { outline: 2px solid #4648d4; outline-offset: 2px; } .ds-row { display: flex; gap: 12px; align-items: flex-start; } .ds-tile { width: 48px; height: 48px; flex-shrink: 0; border-radius: 12px; background: #e1e0ff; color: #4648d4; display: flex; align-items: center; justify-content: center; } .ds-grow { flex: 1; } .ds-h { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; } .ds-b { margin: 0; font-size: 14px; line-height: 20px; color: #464554; } .ds-chip-r { border-radius: 9999px; padding: 4px 10px; background: #ffddb8; color: #825100; font-size: 12px; line-height: 16px; font-weight: 600; } .ds-lbl { display: flex; justify-content: space-between; margin-top: 16px; font-size: 12px; line-height: 16px; font-weight: 600; color: #464554; } .ds-track { display: block; margin-top: 8px; height: 8px; border-radius: 9999px; background: #eaedff; overflow: hidden; } .ds-track span { display: block; height: 100%; border-radius: 9999px; background: linear-gradient(to right, #4648d4, #006c49); }"
+    },
+    {
+      "name": "Indigo Summary Card",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Gradient hero heading Wallet, My Plans and Refer; one per screen.",
+      "html": "<section class=\"ds-summary\"><p class=\"ds-s-l\">Coin balance</p><p class=\"ds-s-n\">226</p><p class=\"ds-s-c\">Lifetime 1,126 · Level 3</p></section>",
+      "css": ".ds-summary { max-width: 358px; border-radius: 16px; padding: 24px; color: #fff; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: linear-gradient(to bottom right, #6063ee, #4648d4); box-shadow: 0 10px 15px -3px rgb(70 72 212 / 0.25), 0 4px 6px -4px rgb(70 72 212 / 0.25); } .ds-s-l { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; } .ds-s-n { margin: 12px 0 0; font-size: 44px; line-height: 1; font-weight: 700; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; } .ds-s-c { margin: 8px 0 0; font-size: 14px; line-height: 20px; opacity: 0.9; }"
+    },
+    {
+      "name": "Bottom Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "Four tabs; the active icon sits in an Indigo Mist pill.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Main\"><a href=\"#\" class=\"on\" aria-current=\"page\"><span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg></span>Home</a><a href=\"#\"><span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\"/><path d=\"m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65\"/><path d=\"m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65\"/></svg></span>Plans</a><a href=\"#\"><span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\"/><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"/><path d=\"m9 14 2 2 4-4\"/></svg></span>My Plans</a><a href=\"#\"><span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\"/><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\"/></svg></span>Wallet</a></nav>",
+      "css": ".ds-tabs { display: grid; grid-template-columns: repeat(4, 1fr); height: 64px; max-width: 448px; background: rgb(255 255 255 / 0.85); backdrop-filter: blur(24px); box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.05); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-tabs a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; line-height: 14px; font-weight: 700; letter-spacing: 0.04em; color: #464554; text-decoration: none; } .ds-tabs a span { display: flex; width: 48px; height: 32px; align-items: center; justify-content: center; border-radius: 9999px; transition: background-color 0.15s; } .ds-tabs a svg { width: 22px; height: 22px; } .ds-tabs a.on { color: #4648d4; } .ds-tabs a.on span { background: #e1e0ff; } .ds-tabs a:hover:not(.on) span { background: #f2f3ff; } .ds-tabs a:focus-visible { outline: 2px solid #4648d4; outline-offset: -2px; }"
+    },
+    {
+      "name": "Bottom Sheet",
+      "kind": "custom",
+      "refersTo": "bottom-sheet",
+      "description": "Confirm flow sliding up over the one slate scrim.",
+      "html": "<div class=\"ds-scrim\"><div class=\"ds-sheet\" role=\"dialog\" aria-label=\"Buy Growth Plan\"><span class=\"ds-handle\"></span><p class=\"ds-sh-t\">Buy Growth Plan?</p><div class=\"ds-sum\"><span>Balance after</span><b>326</b></div><button class=\"ds-sh-btn\">Confirm · spend 600 coins</button></div></div>",
+      "css": ".ds-scrim { height: 320px; max-width: 390px; background: rgb(15 23 42 / 0.4); display: flex; align-items: flex-end; font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-sheet { width: 100%; display: grid; gap: 20px; background: #fff; border-radius: 24px 24px 0 0; padding: 12px 20px 20px; box-shadow: 0 -8px 24px -8px rgb(19 27 46 / 0.16); } .ds-handle { justify-self: center; width: 40px; height: 6px; border-radius: 9999px; background: #cbd5e1; } .ds-sh-t { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; color: #131b2e; } .ds-sum { display: flex; justify-content: space-between; align-items: baseline; background: #f2f3ff; border-radius: 12px; padding: 16px; font-size: 14px; font-weight: 600; color: #131b2e; } .ds-sum b { font-size: 24px; line-height: 30px; color: #4648d4; font-variant-numeric: tabular-nums; } .ds-sh-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 12px; font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0.01em; cursor: pointer; transition: all 0.15s; font-family: Inter, ui-sans-serif, system-ui, sans-serif; height: 52px; background: #4648d4; color: #fff; } .ds-sh-btn:hover { background: #3a3cc0; } .ds-sh-btn:focus-visible { outline: 2px solid #4648d4; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Daily Ledger",
+    "overview": "DailyEarn is the user's Stitch reference system (Material 3 colour roles, Inter) rebuilt as an installable phone app. One lavender-white column holds white cards that lift off the ground through soft shadow alone, never through borders. Colour does the semantic work: indigo is for moving forward and buying, emerald is reserved for claiming, mint marks good states, amber marks what is ready. Every number is a plain coin count set in tabular figures.\n\nThe density is a phone app's: a 16px gutter, 24px between sections, 12px between paired cards. The claim card is the hero of Home; indigo-gradient summary cards head Wallet, My Plans and Refer. Motion is reserved for reward moments (the count easing to zero, the level-up dialog, the plan-activated check) and is fully skipped under reduced motion.\n\nCoins are a game currency, so the visuals never borrow from finance: no currency glyphs, no ROI badges, no capacity or scarcity bars.",
+    "keyCharacteristics": [
+      "One phone-width column (max 448px) on every viewport; desktop centres it on a slightly deeper lavender margin.",
+      "White cards, 12px corners, soft two-layer shadow, no border.",
+      "Indigo for action and buying, emerald only for claiming.",
+      "Pill chips and round-cornered icon tiles carry status and plan identity.",
+      "Inter throughout, with a custom label/body/headline/stat/display scale and tabular numerals."
+    ],
+    "rules": [
+      {
+        "name": "The Emerald Means Claim Rule",
+        "body": "Emerald fills belong to claiming and to success. Buying, navigating and confirming are indigo. A screen never has two filled emerald buttons.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status-Not-By-Colour Rule",
+        "body": "Every tinted chip carries a word and usually an icon or dot (\"Ready\" with a clock, \"Claimed\" with a check). Colour reinforces state; it never carries it alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Coins Rule",
+        "body": "The body sets `font-variant-numeric: tabular-nums`, so counts that tween or sit in columns never jitter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Scale-Only Rule",
+        "body": "Text sizes come from the eleven named steps above. Class merging is configured to know them, so they resolve as sizes rather than colours.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Line Card Rule",
+        "body": "Cards, sheets, dialogs and toasts have no border and no ring. Separation comes from shadow, or from a tonal step (Surface Low or Mid) for panels nested inside a card.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Scrim Rule",
+        "body": "Every overlay, whether centred dialog or bottom sheet, uses the same slate-900 at 40% scrim with no backdrop blur.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** put every content group on a white 12px card with the Card shadow, on the Lavender White ground.",
+      "**Do** keep emerald for claiming and success, and indigo for buying and navigation.",
+      "**Do** pair every status tint with a word plus an icon or dot.",
+      "**Do** use the named type steps; set coin counts in stat or display with tabular numerals.",
+      "**Do** keep the single 448px column on every viewport, with safe-area padding at both bars.",
+      "**Do** gate any new celebration animation behind the reduced-motion block."
+    ],
+    "donts": [
+      "**Don't** add borders or rings to cards, sheets, dialogs or toasts.",
+      "**Don't** blur the overlay scrim or introduce a second scrim colour.",
+      "**Don't** show currency symbols, ROI or \"returns\" badges, capacity or scarcity bars, or real-company logos.",
+      "**Don't** use more than one indigo summary card on a screen.",
+      "**Don't** use countdown pressure or streak-loss threats in the visuals."
+    ]
+  }
+}

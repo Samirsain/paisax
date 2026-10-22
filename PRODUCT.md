@@ -2,52 +2,62 @@
 
 <!-- impeccable:product-schema 1 -->
 
-> Written from the brief without an interview: the user asked to skip questions. Every fact marked *(inferred)* is Claude's call and should be confirmed.
+> Updated 2026-10-21 after a short interview. Confirmed by the user: portfolio/demo audience, coins are a game currency only (streak and levels), Next.js stack. Updated 2026-10-22: the user asked for an installable mobile app (PWA) that looks like their Stitch screens. Facts marked *(inferred)* are Claude's call.
 
 ## Platform
 
-web
+web: an installable PWA (manifest, icons, offline service worker) laid out as a phone app on every screen size. Desktop shows the same app column centred.
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui: the user's choice. Persistence, auth and payments: delegated. For v1, Claude chose a single demo user whose state lives in browser storage, plus a demo checkout. Real auth, a database and Razorpay come later.
+Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui (Base UI): the user's choice. One demo player whose state lives in browser storage. No backend, auth or payments.
 
 ## Users
 
-People in India building a small daily wellness habit, mostly on their phones, in short moments: before work, at lunch, before bed *(inferred)*. Their job is to open the app once a day, collect today's credits, and spend them on one session that fits the moment.
+People reviewing a portfolio piece: recruiters, clients and other designers or developers, on a phone or a laptop. They should understand the daily loop within seconds and judge the craft *(inferred)*. Inside the demo, the persona is a player who opens the app once a day to collect coins and keep a streak going.
 
 ## Product Purpose
 
-Steady *(name inferred)* is a wellness subscription. A plan costs a fixed price in ₹ and runs for a fixed number of days. Each day the subscriber claims that plan's daily credit allowance and spends credits to unlock sessions: workouts, guided meditations, meal plans and coach check-ins. Success means subscribers claim daily and actually use what they unlock.
+DailyEarn is a daily coin-collecting game. Each day the player checks in, claims coins from the plans they own, and keeps their streak alive. Coins buy more plans, and each plan drips coins back daily for 30 days. Lifetime coins raise the player's level. Success means a reviewer gets the loop at a glance and finds every screen finished.
 
 ## Positioning
 
-Credits are an allowance for using the service. They are not money. They have no cash value, cannot be withdrawn or transferred, and are never presented as earnings, returns or ROI. The daily claim exists to build the habit of showing up. It does not exist to pay anything out.
+Coins are a game currency. They can't be bought with money, withdrawn, transferred or exchanged for cash, and they're never shown with ₹, ROI, "returns", "investment" or "income" language. Plans aren't tied to real companies, brands or logos.
 
 ## Operating Context
 
-- Claim: once per active plan per 24 hours, measured from that plan's last claim.
-- A plan completes when its days are used up. Claimed credits stay in the balance until spent *(inferred)*.
-- Sessions are unlocked with credits and stay unlocked.
-- Bottom navigation on mobile. Profile is reached from the header.
+- Daily check-in: once per calendar day. The reward grows with the streak and caps at day 7.
+- Plan claim: once per plan per 24 hours, measured from that plan's last claim. A new plan can be claimed right away.
+- A plan completes when its 30 days are claimed.
+- Streak: consecutive calendar days with at least one claim. Missing a day resets it to 1.
+- Level: set by lifetime coins collected.
+- Invite friends: a code and a share link. A simulated invite grants a coin bonus (demo only).
+- Demo tools: skip 24 hours and reset all data.
+- Any claim counts as the day's check-in, so the check-in bonus comes with the first claim of the day. Plans can be claimed all at once (Home) or one at a time (My Plans).
+- Plans: Starter, Growth, Premium and Elite, each 30 days. One of each runs at a time.
+- Screens: Home, Plans (buy), My Plans (active / completed), Wallet (coin history), Refer, Profile. Bottom tab bar: Home, Plans, My Plans, Wallet. Profile opens from the header avatar; Refer opens from Home's invite card and the Wallet.
 
 ## Capabilities and Constraints
 
-- Plans (placeholder prices, not confirmed): Starter ₹199 for 30 days at 20 credits/day; Plus ₹399 for 30 days at 45 credits/day; Pro ₹799 for 30 days at 100 credits/day.
-- Never show a ₹ value next to credits, a credits-to-₹ rate, a withdraw action or an "earn" framing.
-- Checkout is a demo until Razorpay is wired up.
+- No deposits, withdrawals, UPI or payment methods, cash value or real-money wording anywhere.
+- No fabricated social proof. That rules out a live feed of other users, fake scarcity or capacity bars, and invented counts.
+- All data is local and synthetic. The app is labelled as a demo.
+
+## Brand Commitments
+
+Name "DailyEarn" (carried over from the user's Stitch project). The look follows the user's Stitch reference screens (pinned 2026-10-22). The logo is the Stitch mark redrawn in SVG, with a coin replacing its currency glyph (`components/marks.tsx`).
 
 ## Evidence on Hand
 
-None. There's no real session content, coach, testimonial, user count or rating. All library content is synthetic demo material and must be labelled as such. Never invent social proof.
+There are no real users, testimonials or metrics. The user's Stitch reference screens are at `../stitch-daily-earn/*.png`. Follow their layout and visual system, but leave out their ₹ amounts, ROI, capacity bars, withdrawals and payment details. Never invent social proof.
 
 ## Product Principles
 
-1. The allowance serves the habit: every screen points toward using a session, not toward accumulating a balance.
-2. Plain numbers: price, days, credits per day and sessions are stated outright, with no hidden terms.
-3. One tap a day: claiming must be the fastest action in the app.
-4. Calm over urgency: no streak-loss threats, countdown pressure or casino mechanics.
+1. One tap a day: claiming is the fastest action in the app.
+2. Plain numbers: cost, coins per day, days and level thresholds are stated outright.
+3. Calm game, not casino: no countdown pressure, streak-loss threats or slot-machine visuals.
+4. Honest demo: everything is visibly a game with virtual coins.
 
 ## Accessibility & Inclusion
 
-Large touch targets, a readable base size and WCAG AA contrast. Status is never conveyed by colour alone *(inferred baseline)*.
+Large touch targets, a readable base size and WCAG AA contrast. Status is never conveyed by colour alone, and motion respects reduced-motion settings *(inferred baseline)*.
