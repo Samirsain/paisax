@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: user.id, name: user.name, phone: user.phone, inviteCode: user.invite_code })
   } catch (err) {
-    console.error("login error:", err)
-    return NextResponse.json({ error: "Server error, please try again" }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("login error:", msg)
+    return NextResponse.json({ error: "Server error", detail: msg }, { status: 500 })
   }
 }
