@@ -1,6 +1,6 @@
-﻿"use client"
+"use client"
 
-import { useSyncExternalStore } from "react"
+import { useSyncExternalStore, useEffect } from "react"
 import * as game from "@/lib/game"
 import type { PlanId, State } from "@/lib/game"
 
@@ -26,7 +26,7 @@ function getState(): State {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) ?? "null")
       if (game.isState(saved)) {
-        state = saved
+        state = { ...saved, owned: game.sanitizeOwned(saved.owned) }
       } else {
         // New player: capture invite code from URL if present
         const inviteFrom = readInviteCode()
@@ -86,15 +86,82 @@ function earn(fn: (s: State, now: number) => State) {
   return after.coins - before.coins
 }
 
+/** Synchronizes client state with the database (pending orders & backup) */
+let syncInitialized = false
+export async function syncWithServer() {
+  if (typeof window === "undefined") return
+  try {
+    const res = await fetch("/api/game/sync")
+    if (!res.ok) return
+    const data = await res.json()
+    if (!data.authenticated) return
+
+    const currentState = getState()
+    let updated = false
+    let nextState = currentState
+
+    // Sync player name and invite code from auth account
+    if (data.user?.name && (nextState.name === "Player" || nextState.name === "Rahul")) {
+      nextState = { ...nextState, name: data.user.name, inviteCode: data.user.inviteCode || nextState.inviteCode }
+      updated = true
+    }
+
+    // Check confirmed paid orders from database and activate them if missing
+    if (Array.isArray(data.confirmedOrders)) {
+      for (const order of data.confirmedOrders) {
+        if (order.planId === "recharge") {
+          const alreadyCredited = nextState.history.some((h) => h.id === order.orderId)
+          if (!alreadyCredited) {
+            const boughtTime = order.createdAt ? new Date(order.createdAt).getTime() : Date.now()
+            nextState = {
+              ...nextState,
+              coins: nextState.coins + order.amount,
+              lifetime: nextState.lifetime + order.amount,
+              history: [
+                { id: order.orderId, at: boughtTime, coins: order.amount, kind: "welcome" },
+                ...nextState.history,
+              ],
+            }
+            updated = true
+          }
+        } else {
+          const alreadyHasOrder = nextState.owned.some((o) => o.id === order.orderId)
+          if (!alreadyHasOrder && game.PLANS.some((p) => p.id === order.planId)) {
+            const boughtTime = order.createdAt ? new Date(order.createdAt).getTime() : Date.now()
+            nextState = game.activatePlan(nextState, order.planId as PlanId, boughtTime, order.orderId)
+            updated = true
+          }
+        }
+      }
+    }
+
+    if (updated) {
+      commit(() => nextState)
+    }
+
+    // Persist backup state to database
+    fetch("/api/game/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: getState() }),
+    }).catch(() => {})
+  } catch {
+    // Graceful offline fallback
+  }
+}
+
 const actions = {
   /** Claims today's check-in plus every ready plan, or one plan; returns the coins collected. */
   collect: (onlyId?: string) => earn((s, t) => game.collect(s, t, onlyId)),
   buy: (planId: PlanId) => commit((s, t) => game.buy(s, planId, t)),
+  activatePlan: (planId: PlanId, orderId?: string) => commit((s, t) => game.activatePlan(s, planId, t, orderId)),
+  withdraw: (amount: number, method = "upi") => commit((s, t) => game.withdraw(s, amount, t, method)),
   invite: () => earn(game.invite),
   rename: (name: string) => commit((s) => ({ ...s, name })),
   skipDay: () => commit((s) => ({ ...s, skew: s.skew + game.DAY_MS })),
   startFresh: () => commit((s) => game.newPlayer(s.name, Date.now())),
   restoreDemo: () => commit(() => game.demoPlayer(Date.now())),
+  syncWithServer,
 }
 
 export function useLevelUp() {
@@ -112,6 +179,16 @@ export function useLevelUp() {
 export function useStore() {
   const s = useSyncExternalStore(subscribe, getState, () => null)
   const now = useSyncExternalStore(subscribe, getClock, () => 0)
+
+  useEffect(() => {
+    if (!syncInitialized) {
+      syncInitialized = true
+      syncWithServer()
+      const syncInterval = setInterval(syncWithServer, 20_000)
+      return () => clearInterval(syncInterval)
+    }
+  }, [])
+
   return { ready: s !== null, now, state: s ?? game.newPlayer("Rahul", 0), ...actions }
 }
 

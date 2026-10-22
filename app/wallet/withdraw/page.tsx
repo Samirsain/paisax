@@ -1,34 +1,81 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import Link from "next/link"
 import Image from "next/image"
-import { useState } from "react"
-import { AlertCircleIcon, BanknoteIcon, CheckCircle2Icon, ClockIcon, InfoIcon, ShieldCheckIcon, XCircleIcon } from "lucide-react"
+import {
+  AlertCircleIcon,
+  ArrowRightIcon,
+  BanknoteIcon,
+  Building2Icon,
+  CheckCircle2Icon,
+  ClockIcon,
+  HelpCircleIcon,
+  InfoIcon,
+  LockIcon,
+  QrCodeIcon,
+  ShieldCheckIcon,
+  SmartphoneIcon,
+  WalletIcon,
+  XCircleIcon,
+} from "lucide-react"
+import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
-import { useStore } from "@/lib/store"
-import { canWithdrawToday, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
+import { Button } from "@/components/ui/button"
+import { canWithdrawToday, hasBoughtPaidPlan, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
+import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { UpiIcon, BankIcon, PaytmIcon } from "@/components/payment-icons"
 
 const METHODS = [
-  { id: "upi", label: "UPI", icon: "₹", placeholder: "yourname@upi" },
-  { id: "bank", label: "Bank Transfer", icon: "🏦", placeholder: "Account number" },
-  { id: "paytm", label: "Paytm", icon: "P", placeholder: "Paytm mobile number" },
+  { id: "upi", label: "UPI", icon: UpiIcon, placeholder: "e.g. yourname@okhdfcbank" },
+  { id: "bank", label: "Bank Transfer", icon: BankIcon, placeholder: "Account Number" },
+  { id: "paytm", label: "Paytm Wallet", icon: PaytmIcon, placeholder: "10-digit Paytm mobile number" },
 ]
 
-// Recent withdrawals for social proof — with dicebear seeds for avatars
-const RECENT = [
-  { name: "Priya S.", amount: 1170, plan: "Jio Plan", time: "2h ago", seed: "priya" },
-  { name: "Rahul V.", amount: 2970, plan: "Tata Plan", time: "5h ago", seed: "rahul" },
-  { name: "Ananya K.", amount: 660, plan: "Airtel Plan", time: "9h ago", seed: "ananya" },
-  { name: "Arjun P.", amount: 390, plan: "Jio Plan", time: "14h ago", seed: "arjun" },
+const INDIAN_PAYOUTS_POOL = [
+  { name: "Rajesh Sharma", amount: 18450, time: "Just now", method: "Instant UPI", avatar: "/avatar/1.png" },
+  { name: "Priya Patel", amount: 8900, time: "1 min ago", method: "Bank IMPS", avatar: "/avatar/2.png" },
+  { name: "Vikram Chauhan", amount: 24600, time: "2 min ago", method: "Instant UPI", avatar: "/avatar/3.png" },
+  { name: "Ananya Iyer", amount: 12000, time: "3 min ago", method: "Bank IMPS", avatar: "/avatar/4.png" },
+  { name: "Amit Verma", amount: 36800, time: "4 min ago", method: "Instant UPI", avatar: "/avatar/1.png" },
+  { name: "Deepak Yadav", amount: 6500, time: "6 min ago", method: "Instant UPI", avatar: "/avatar/2.png" },
+  { name: "Sunita Deshmukh", amount: 15200, time: "7 min ago", method: "Bank IMPS", avatar: "/avatar/3.png" },
+  { name: "Manoj Tiwari", amount: 48000, time: "9 min ago", method: "Bank IMPS", avatar: "/avatar/4.png" },
+  { name: "Pooja Choudhary", amount: 9800, time: "11 min ago", method: "Instant UPI", avatar: "/avatar/1.png" },
+  { name: "Suresh Reddy", amount: 28500, time: "13 min ago", method: "Bank IMPS", avatar: "/avatar/2.png" },
+  { name: "Neha Gupta", amount: 11400, time: "15 min ago", method: "Instant UPI", avatar: "/avatar/3.png" },
+  { name: "Rohit Singhania", amount: 52000, time: "18 min ago", method: "Bank IMPS", avatar: "/avatar/4.png" },
 ]
 
 export default function WithdrawPage() {
-  const { ready: loaded, state } = useStore()
+  const { ready: loaded, state, withdraw } = useStore()
   const [amount, setAmount] = useState("")
   const [method, setMethod] = useState("upi")
+  const [accountName, setAccountName] = useState("")
   const [address, setAddress] = useState("")
-  const [step, setStep] = useState<"form" | "confirm" | "success">("form")
+  const [ifsc, setIfsc] = useState("")
+  const [step, setStep] = useState<"form" | "success">("form")
   const [error, setError] = useState("")
+  const [payouts, setPayouts] = useState(INDIAN_PAYOUTS_POOL.slice(0, 5))
+  const [pulseIdx, setPulseIdx] = useState<number | null>(null)
+
+  // Live rotating payouts with real Indian names & high amounts
+  useEffect(() => {
+    let poolIndex = 5
+    const timer = setInterval(() => {
+      const next = {
+        ...INDIAN_PAYOUTS_POOL[poolIndex % INDIAN_PAYOUTS_POOL.length],
+        time: "Just now",
+      }
+      poolIndex++
+      setPayouts((prev) => [next, ...prev.slice(0, 4)])
+      setPulseIdx(0)
+      setTimeout(() => setPulseIdx(null), 1200)
+    }, 3000)
+
+    return () => clearInterval(timer)
+  }, [])
 
   if (!loaded) return <Skeleton />
 
@@ -36,242 +83,412 @@ export default function WithdrawPage() {
   const dayName = new Date().toLocaleDateString("en-IN", { weekday: "long" })
   const coins = state.coins
   const available = Math.max(0, coins)
-  const amt = parseInt(amount) || 0
-  const fee = Math.round(amt * WITHDRAW_FEE_PCT / 100)
-  const payout = amt - fee
+  const amt = parseInt(amount, 10) || 0
+  const fee = Math.round((amt * WITHDRAW_FEE_PCT) / 100)
+  const netPayout = Math.max(0, amt - fee)
+  const hasPaidPlan = hasBoughtPaidPlan(state)
 
-  function validate() {
-    if (!today) { setError(`Withdrawals not available on ${dayName}`); return false }
-    if (amt < WITHDRAW_MIN) { setError(`Minimum withdrawal is ₹${WITHDRAW_MIN}`); return false }
-    if (amt > available) { setError("Amount exceeds your coin balance"); return false }
-    if (!address.trim()) { setError("Enter your payment address"); return false }
-    setError("")
-    return true
+  const isFormValid =
+    today &&
+    hasPaidPlan &&
+    amt >= WITHDRAW_MIN &&
+    amt <= available &&
+    Boolean(address.trim()) &&
+    (method !== "bank" || (Boolean(ifsc.trim()) && Boolean(accountName.trim())))
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!hasPaidPlan) {
+      setError("Withdrawal locked! Pehle koi bhi paid solar plan khareedein tabhi payout unlock hoga.")
+      toast.error("Withdrawal locked! Please activate a paid solar plan first.")
+      return
+    }
+    if (!today) {
+      setError(`Withdrawals are closed on weekends (${dayName}). Please request on Monday.`)
+      return
+    }
+    if (isNaN(amt) || amt < WITHDRAW_MIN) {
+      setError(`Minimum withdrawal amount is ₹${WITHDRAW_MIN}`)
+      return
+    }
+    if (amt > available) {
+      setError(`Withdrawal amount exceeds your available balance (₹${fmt(available)})`)
+      return
+    }
+    if (!address.trim()) {
+      setError("Please provide your account or UPI details")
+      return
+    }
+    if (method === "bank" && (!ifsc.trim() || !accountName.trim())) {
+      setError("Please fill in Account Holder Name and IFSC Code")
+      return
+    }
+
+    try {
+      withdraw(amt, method)
+      setError("")
+      setStep("success")
+      toast.success("Withdrawal request submitted successfully!")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Withdrawal failed"
+      setError(msg)
+      toast.error(msg)
+    }
   }
 
-  const selectedMethod = METHODS.find(m => m.id === method)!
-
   return (
-    <div className="flex flex-col gap-5 pt-2">
-      <h1 className="sr-only">Withdraw</h1>
+    <div className="flex flex-col gap-4 pb-12 max-w-md mx-auto font-sans -mt-3">
+      
+      {/* ── TOP HEADER BANNER (Solar Gradient) ────────────────────────── */}
+      <div className="relative -mx-3.5 px-5 pt-6 pb-12 rounded-b-[36px] bg-gradient-to-b from-[#b45309] via-[#d97706] to-[#f59e0b] shadow-md text-white text-center overflow-hidden">
+        {/* Glow decoration */}
+        <div className="absolute -top-12 -right-12 size-48 rounded-full bg-yellow-300/20 blur-2xl pointer-events-none" />
+        <div className="absolute -bottom-8 -left-8 size-36 rounded-full bg-amber-950/30 blur-xl pointer-events-none" />
 
-      {/* ── Balance card (gradient, self-contained dark) ── */}
-      <section className="rounded-2xl p-5 text-white shadow-lg" style={{ background: "linear-gradient(135deg,#1e1a9e,#2f2fbd)" }}>
-        <div className="flex items-center justify-between mb-1">
-          <p className="flex items-center gap-2 text-sm font-semibold opacity-80">
-            <BanknoteIcon className="size-4" /> Available Balance
+        <h1 className="text-xl font-black tracking-tight text-white drop-shadow-xs">
+          Withdraw Funds
+        </h1>
+
+        <div className="mt-3">
+          <p className="text-xs font-semibold text-amber-100">Available Balance</p>
+          <p className="mt-1 text-4xl font-black text-white tracking-tight drop-shadow-sm">
+            ₹{fmt(available)}
           </p>
-          <span className="flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold">
-            <span className="size-1.5 rounded-full bg-emerald-300" />
-            Coins
-          </span>
         </div>
-        <p className="text-[42px] font-bold leading-none tracking-tight mt-2">₹{available.toLocaleString("en-IN")}</p>
-        <p className="text-xs mt-1.5 opacity-65">Min. ₹{WITHDRAW_MIN} · {WITHDRAW_FEE_PCT}% processing fee · Mon–Fri only</p>
 
-        {/* Quick amounts */}
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          {[200, 500, 1000, available].map((v) => (
-            <button key={v} type="button"
-              onClick={() => setAmount(String(Math.min(v, available)))}
-              className={cn("rounded-xl py-2 text-sm font-bold transition-all active:scale-95",
-                amt === v ? "bg-white text-[#1e1a9e]" : "bg-white/20 text-white hover:bg-white/30"
-              )}
-            >
-              {v === available ? "All" : `₹${v}`}
-            </button>
-          ))}
+        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-bold text-amber-100">
+          <ShieldCheckIcon className="size-3.5 text-yellow-300" />
+          <span>Min ₹{WITHDRAW_MIN} · 3% Tax Fee · Mon–Fri Payouts</span>
         </div>
-      </section>
+      </div>
 
-      {/* ── Weekend warning ── */}
+      {/* ── WEEKEND WARNING (If Saturday/Sunday) ──────────────────────── */}
       {!today && (
-        <div className="flex items-start gap-2.5 rounded-2xl bg-red-50 p-4 ring-1 ring-red-200">
-          <XCircleIcon className="size-5 shrink-0 mt-0.5 text-red-500" />
+        <div className="mx-1 rounded-2xl bg-amber-50 p-4 border border-amber-300/80 flex items-start gap-3">
+          <XCircleIcon className="size-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold text-red-700">Withdrawals Closed Today</p>
-            <p className="text-xs text-red-500 mt-0.5">
-              No withdrawals on Saturday & Sunday. Please come back on Monday.
+            <p className="text-xs font-black text-amber-950">Withdrawals Closed Today ({dayName})</p>
+            <p className="text-[11px] text-amber-900 mt-0.5">
+              Banking channels process withdrawals Monday to Friday (10 AM to 6 PM). Requests open on Monday morning.
             </p>
           </div>
         </div>
       )}
 
       {step === "success" ? (
-        /* ── Success ── */
-        <div className="flex flex-col items-center gap-4 rounded-2xl bg-emerald-50 p-8 text-center ring-1 ring-emerald-200">
-          <CheckCircle2Icon className="size-16 text-emerald-500" />
-          <div>
-            <p className="text-xl font-bold text-on-surface">Request Submitted!</p>
-            <p className="text-sm text-on-variant mt-1">
-              ₹{payout.toLocaleString("en-IN")} will be credited to your {selectedMethod.label} within 24–48 hours.
-            </p>
+        /* ── SUCCESS STATE ─────────────────────────────────────────── */
+        <div className="rounded-[32px] bg-white p-7 text-center shadow-lg border border-amber-100 flex flex-col items-center">
+          <div className="flex size-18 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-inner">
+            <CheckCircle2Icon className="size-10" />
           </div>
-          <div className="w-full rounded-xl bg-white p-3.5 ring-1 ring-border text-left">
-            <div className="flex justify-between text-sm">
-              <span className="text-on-variant">Requested</span>
-              <span className="text-on-surface font-semibold">₹{amt.toLocaleString("en-IN")}</span>
+
+          <h2 className="mt-4 text-xl font-black text-slate-900">
+            Withdrawal Request Sent!
+          </h2>
+          <p className="mt-1.5 max-w-[260px] text-xs font-medium text-slate-500 leading-relaxed">
+            Your payout of <strong className="text-emerald-700">₹{fmt(netPayout)}</strong> is being processed and will be credited to your account shortly.
+          </p>
+
+          <div className="mt-5 w-full rounded-2xl bg-amber-50/50 p-4 border border-amber-200 text-left text-xs divide-y divide-amber-100">
+            <div className="flex justify-between py-1.5">
+              <span className="text-slate-500">Requested Amount</span>
+              <span className="font-bold text-slate-900">₹{fmt(amt)}</span>
             </div>
-            <div className="flex justify-between text-sm mt-1.5">
-              <span className="text-on-variant">Fee ({WITHDRAW_FEE_PCT}%)</span>
-              <span className="text-red-600 font-semibold">−₹{fee}</span>
+            <div className="flex justify-between py-1.5">
+              <span className="text-slate-500">Service Fee ({WITHDRAW_FEE_PCT}%)</span>
+              <span className="font-bold text-slate-700">-₹{fmt(fee)}</span>
             </div>
-            <div className="flex justify-between text-sm mt-1.5 pt-1.5 border-t border-border">
-              <span className="text-on-surface font-bold">You receive</span>
-              <span className="font-bold text-claim">₹{payout.toLocaleString("en-IN")}</span>
+            <div className="flex justify-between py-1.5">
+              <span className="font-bold text-slate-900">Final Credit</span>
+              <span className="font-black text-emerald-600 text-sm">₹{fmt(netPayout)}</span>
+            </div>
+            <div className="flex justify-between py-1.5">
+              <span className="text-slate-500">Channel</span>
+              <span className="font-bold text-slate-800 uppercase">{method}</span>
             </div>
           </div>
-          <button onClick={() => { setStep("form"); setAmount(""); setAddress("") }}
-            className="w-full rounded-full py-3 text-sm font-bold text-primary ring-1 ring-primary/20 hover:bg-primary-fixed transition-colors">
-            Make Another Withdrawal
+
+          <button
+            type="button"
+            onClick={() => {
+              setStep("form")
+              setAmount("")
+              setAddress("")
+            }}
+            className="mt-6 w-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 py-3.5 text-sm font-extrabold text-white shadow-md active:scale-95 cursor-pointer"
+          >
+            Done
           </button>
         </div>
-      ) : step === "confirm" ? (
-        /* ── Confirm ── */
-        <div className="flex flex-col gap-4 rounded-2xl bg-white p-5 ring-1 ring-border shadow-card">
-          <p className="text-base font-bold text-on-surface">Confirm Withdrawal</p>
+      ) : !hasPaidPlan ? (
+        /* ── LOCKED WITHDRAWAL CARD (Paid Plan Required) ──────────── */
+        <div className="relative -mt-6 mx-1 rounded-[26px] bg-white p-6 shadow-xl shadow-amber-950/5 border border-amber-200 text-center">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-500/15 border border-amber-300 text-amber-600">
+            <LockIcon className="size-7" />
+          </div>
+          <h2 className="mt-3.5 text-lg font-black text-slate-900">
+            Withdrawal Locked
+          </h2>
+          <p className="mt-1.5 text-xs font-semibold text-slate-600 leading-relaxed max-w-xs mx-auto">
+            Withdrawal shuru karne ke liye aapke paas kam se kam <strong className="text-amber-800">ek Paid Solar Plan</strong> hona anivarya hai (₹300 ya usse bada).
+          </p>
+          <div className="mt-4 rounded-2xl bg-amber-50/80 p-3.5 text-xs font-bold text-amber-950 border border-amber-200 text-left flex items-start gap-2.5">
+            <ShieldCheckIcon className="size-4.5 text-amber-600 shrink-0 mt-0.5" />
+            <span>Paid plan activate hote hi aapka direct UPI / Bank withdrawal turant unlock ho jayega!</span>
+          </div>
+          <Link
+            href="/plans"
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-amber-500/30 active:scale-95 transition-all"
+          >
+            <span>Browse Solar Plans (Starting ₹300)</span>
+            <ArrowRightIcon className="size-4" />
+          </Link>
+        </div>
+      ) : (
+        /* ── WITHDRAW FORM ─────────────────────────────────────────── */
+        <form onSubmit={handleSubmit} className="relative -mt-6 mx-1 rounded-[26px] bg-white p-5 shadow-xl shadow-amber-950/5 border border-amber-100/80">
+          
+          <h2 className="text-sm font-black text-slate-900">
+            Enter Withdrawal Amount
+          </h2>
 
-          <div className="flex flex-col gap-2 rounded-xl bg-surface-low p-4">
-            {[
-              ["Amount", `₹${amt.toLocaleString("en-IN")}`],
-              ["Processing fee", `−₹${fee} (${WITHDRAW_FEE_PCT}%)`],
-              ["You receive", `₹${payout.toLocaleString("en-IN")}`],
-              ["Method", selectedMethod.label],
-              ["To", address],
-              ["Est. time", "24–48 business hours"],
-            ].map(([k, v]) => (
-              <div key={k} className={cn("flex justify-between text-sm", k === "You receive" && "pt-2 border-t border-border")}>
-                <span className="text-on-variant">{k}</span>
-                <span className={cn("font-semibold", k === "You receive" ? "text-claim font-bold" : k === "Processing fee" ? "text-red-600" : "text-on-surface")}>{v}</span>
-              </div>
+          {/* Quick preset amount pills */}
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {[200, 500, 1000, available].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  setAmount(String(Math.min(v, available)))
+                  setError("")
+                }}
+                className={cn(
+                  "rounded-2xl py-2 px-1 text-center transition-all cursor-pointer border text-xs font-extrabold",
+                  amount === String(Math.min(v, available))
+                    ? "bg-gradient-to-r from-amber-500 to-amber-600 text-white border-amber-500 shadow-sm"
+                    : "bg-amber-50/40 text-slate-700 border-amber-200/70 hover:bg-amber-50"
+                )}
+              >
+                {v === available ? "All (Max)" : `₹${v}`}
+              </button>
             ))}
           </div>
 
-          <div className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs ring-1 ring-amber-200">
-            <InfoIcon className="size-4 shrink-0 mt-0.5 text-amber-600" />
-            <p className="text-amber-700">Once submitted, withdrawal requests cannot be cancelled. Funds are transferred after manual verification.</p>
+          {/* Amount input */}
+          <div className={cn(
+            "mt-3 flex items-center gap-2 rounded-2xl bg-slate-50 border px-3.5 py-2.5 transition-colors",
+            amt > 0 && (amt < WITHDRAW_MIN || amt > available) ? "border-red-400 bg-red-50/20" : "border-slate-200"
+          )}>
+            <span className="text-base font-black text-slate-500">₹</span>
+            <input
+              type="number"
+              min={WITHDRAW_MIN}
+              max={available}
+              value={amount}
+              onChange={(e) => {
+                const val = e.target.value
+                setAmount(val)
+                const num = parseInt(val, 10)
+                if (!val) {
+                  setError("")
+                } else if (isNaN(num) || num < WITHDRAW_MIN) {
+                  setError(`Minimum withdrawal amount is ₹${WITHDRAW_MIN}`)
+                } else if (num > available) {
+                  setError(`Amount exceeds your balance (₹${fmt(available)})`)
+                } else {
+                  setError("")
+                }
+              }}
+              placeholder={`Min. ₹${WITHDRAW_MIN}`}
+              className="flex-1 bg-transparent text-sm font-black text-slate-900 outline-none"
+            />
           </div>
-
-          <div className="flex gap-3">
-            <button onClick={() => setStep("form")}
-              className="flex-1 rounded-full py-3 text-sm font-bold ring-1 ring-border text-on-variant hover:bg-surface-low transition-colors">
-              Go Back
-            </button>
-            <button onClick={() => setStep("success")}
-              className="flex-1 rounded-full py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-95"
-              style={{ background: "linear-gradient(135deg,#006c49,#4edea3)", boxShadow: "0 6px 20px #4edea330" }}>
-              Confirm ₹{payout.toLocaleString("en-IN")}
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* ── Form ── */
-        <div className="flex flex-col gap-4 rounded-2xl bg-white p-5 ring-1 ring-border shadow-card">
-          {/* Amount */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-widest text-on-variant">Withdrawal Amount (₹)</label>
-            <div className="flex items-center gap-2 rounded-xl bg-surface-low px-4 py-3.5 ring-1 ring-border text-lg">
-              <span className="font-bold text-on-variant">₹</span>
-              <input type="number" inputMode="numeric" placeholder="Enter amount" min={WITHDRAW_MIN} max={available}
-                value={amount} onChange={(e) => { setAmount(e.target.value); setError("") }}
-                className="w-full bg-transparent font-bold text-on-surface placeholder:text-on-variant/40 outline-none" />
-            </div>
-            {amt > 0 && (
-              <p className="text-xs text-amber-700">
-                Fee: ₹{fee} · You receive: <span className="font-bold text-claim">₹{payout}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Method */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-widest text-on-variant">Payment Method</label>
-            <div className="grid grid-cols-3 gap-2">
-              {METHODS.map(m => (
-                <button key={m.id} type="button" onClick={() => setMethod(m.id)}
-                  className={cn("flex flex-col items-center gap-1 rounded-xl py-3 text-sm font-bold transition-all ring-1",
-                    method === m.id
-                      ? "bg-primary-fixed text-primary ring-primary/30"
-                      : "bg-surface-low text-on-variant ring-border hover:bg-surface-mid"
-                  )}>
-                  <span className="text-lg">{m.icon}</span>
-                  <span className="text-[11px]">{m.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Address */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-widest text-on-variant">
-              {selectedMethod.id === "bank" ? "Account Number" : selectedMethod.id === "paytm" ? "Paytm Number" : "UPI ID"}
-            </label>
-            <div className="flex items-center gap-2 rounded-xl bg-surface-low px-3.5 py-3 ring-1 ring-border">
-              <span className="text-on-variant/50 text-sm">@</span>
-              <input type="text" placeholder={selectedMethod.placeholder}
-                value={address} onChange={(e) => { setAddress(e.target.value); setError("") }}
-                className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-variant/40 outline-none" />
-            </div>
-          </div>
-
-          {/* Rules */}
-          <div className="flex flex-col gap-2 rounded-xl bg-surface-low p-3.5 text-xs">
-            <div className="flex items-center gap-2">
-              <ShieldCheckIcon className="size-3.5 shrink-0 text-claim" />
-              <span className="text-on-variant">Min. ₹{WITHDRAW_MIN} · Max. ₹{available.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <ClockIcon className="size-3.5 shrink-0 text-amber" />
-              <span className="text-on-variant">Mon–Fri only. No weekends.</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <AlertCircleIcon className="size-3.5 shrink-0 text-primary" />
-              <span className="text-on-variant">{WITHDRAW_FEE_PCT}% processing fee deducted automatically</span>
-            </div>
-          </div>
-
-          {error && (
-            <p role="alert" className="flex items-center gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm text-red-700 ring-1 ring-red-200">
-              <AlertCircleIcon className="size-4 shrink-0" />
-              {error}
+          {amt > 0 && amt < WITHDRAW_MIN && (
+            <p className="mt-1 text-[11px] font-bold text-red-500">
+              ⚠️ Minimum withdrawal amount is ₹{WITHDRAW_MIN} (You entered ₹{amt})
+            </p>
+          )}
+          {amt > available && (
+            <p className="mt-1 text-[11px] font-bold text-red-500">
+              ⚠️ Cannot withdraw more than balance (₹{fmt(available)})
             </p>
           )}
 
-          <button type="button" disabled={!today}
-            onClick={() => { if (validate()) setStep("confirm") }}
-            className="flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-sm font-bold text-white shadow-lg active:scale-[0.98] disabled:opacity-40 transition-all"
-            style={{ background: "linear-gradient(135deg,#006c49,#00714d)", boxShadow: "0 8px 24px #4edea330" }}>
-            <BanknoteIcon className="size-4" />
-            {today ? "Request Withdrawal" : `Unavailable on ${dayName}`}
-          </button>
-        </div>
+          {/* Channel Selector */}
+          <p className="mt-4 text-xs font-black text-slate-900">
+            Withdrawal Method
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {METHODS.map((m) => {
+              const Icon = m.icon
+              const selected = method === m.id
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setMethod(m.id)
+                    setError("")
+                  }}
+                  className={cn(
+                    "flex flex-col items-center justify-center rounded-2xl p-2.5 border text-xs font-bold transition-all cursor-pointer h-20",
+                    selected
+                      ? "bg-amber-50 border-amber-500 text-amber-800 shadow-xs"
+                      : "bg-slate-50/60 border-slate-200 text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  <Icon className={cn("h-6 w-auto max-w-[46px] mb-1.5", selected ? "opacity-100" : "opacity-60")} />
+                  <span className="truncate">{m.label}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Account Details Input */}
+          <div className="mt-3.5 flex flex-col gap-2.5">
+            {method === "bank" ? (
+              <>
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="Account Holder Full Name"
+                  className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
+                />
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Bank Account Number"
+                  className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono"
+                />
+                <input
+                  type="text"
+                  value={ifsc}
+                  onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+                  placeholder="Bank IFSC Code (e.g. SBIN0001234)"
+                  className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono uppercase"
+                />
+              </>
+            ) : (
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={METHODS.find((m) => m.id === method)?.placeholder}
+                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
+              />
+            )}
+          </div>
+
+          {/* Calculation summary */}
+          {amt > 0 && (
+            <div className="mt-4 rounded-2xl bg-amber-50/50 p-3.5 border border-amber-200/70 text-xs">
+              <div className="flex justify-between text-slate-600 py-0.5">
+                <span>Withdrawal Amount:</span>
+                <span className="font-bold text-slate-900">₹{fmt(amt)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 py-0.5">
+                <span>Fee ({WITHDRAW_FEE_PCT}%):</span>
+                <span className="font-semibold text-slate-700">-₹{fmt(fee)}</span>
+              </div>
+              <div className="flex justify-between pt-1 mt-1 border-t border-amber-200 text-slate-900 font-bold">
+                <span>Actual Credit to Account:</span>
+                <span className="text-emerald-600 text-sm font-black">₹{fmt(netPayout)}</span>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="mt-3 text-xs text-red-600 font-semibold">{error}</p>
+          )}
+
+          {/* Confirm Button */}
+          <Button
+            type="submit"
+            variant="buy"
+            size="xl"
+            disabled={!isFormValid}
+            className={cn(
+              "mt-4 w-full rounded-full py-3.5 font-black transition-all",
+              !isFormValid
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border-none"
+                : "bg-gradient-to-r from-[#eab308] via-[#f59e0b] to-[#d97706] text-slate-950 shadow-lg shadow-amber-500/25 active:scale-95 cursor-pointer"
+            )}
+          >
+            {!hasPaidPlan
+              ? "Paid Plan Required"
+              : !today
+              ? "Withdrawals Closed on Weekends"
+              : available < WITHDRAW_MIN
+              ? `Balance below ₹${WITHDRAW_MIN}`
+              : !amt || amt < WITHDRAW_MIN
+              ? `Enter Min. ₹${WITHDRAW_MIN}`
+              : amt > available
+              ? "Amount Exceeds Balance"
+              : !address.trim()
+              ? "Enter Account / UPI Details"
+              : `Confirm Withdrawal (₹${fmt(amt)})`}
+          </Button>
+        </form>
       )}
 
-      {/* ── Recent withdrawals with avatars ── */}
-      <section>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-on-variant mb-3">Recent Member Withdrawals</p>
-        <div className="flex flex-col gap-2">
-          {RECENT.map((r, i) => (
-            <div key={i} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-border shadow-card">
-              <div className="flex items-center gap-2.5">
-                <Image
-                  src={`https://api.dicebear.com/9.x/thumbs/svg?seed=${r.seed}&radius=50`}
-                  alt=""
-                  width={36}
-                  height={36}
-                  unoptimized
-                  className="size-9 shrink-0 rounded-full"
-                />
+      {/* ── LIVE RECENT PAYOUTS (Social Proof with Live Rotating Updates) ── */}
+      <div className="flex flex-col gap-2 mt-1">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+            </span>
+            <h2 className="text-xs font-black uppercase tracking-wider text-slate-700">
+              Live Recent Payouts
+            </h2>
+          </div>
+          <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+            Realtime 24×7
+          </span>
+        </div>
+
+        <div className="rounded-[26px] bg-white shadow-sm border border-amber-100 divide-y divide-amber-100/70 overflow-hidden">
+          {payouts.map((item, idx) => (
+            <div
+              key={`${item.name}-${idx}`}
+              className={cn(
+                "flex items-center justify-between p-3.5 transition-all duration-500",
+                pulseIdx === idx ? "bg-emerald-50/70" : "hover:bg-amber-50/30"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <div className="relative size-10 rounded-full overflow-hidden border-2 border-amber-300 shadow-xs shrink-0 ring-1 ring-amber-400/40">
+                  <Image
+                    src={item.avatar}
+                    alt={item.name}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
                 <div>
-                  <p className="text-sm font-semibold text-on-surface">{r.name}</p>
-                  <p className="text-xs text-on-variant">{r.plan} · {r.time}</p>
+                  <p className="text-xs font-bold text-slate-900">{item.name}</p>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    {item.method} · {item.time}
+                  </p>
                 </div>
               </div>
-              <p className="text-sm font-bold text-claim">+₹{r.amount.toLocaleString("en-IN")}</p>
+
+              <div className="text-right">
+                <p className="text-sm font-black text-emerald-600">
+                  +₹{fmt(item.amount)}
+                </p>
+                <span className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700 border border-emerald-200">
+                  Transferred
+                </span>
+              </div>
             </div>
           ))}
         </div>
-      </section>
+      </div>
+
     </div>
   )
 }

@@ -1,6 +1,12 @@
 // Pure game rules for PaisaX. Daily earnings and streak logic.
 
-export type PlanId = "free" | "jio" | "airtel" | "tata" | "tesla"
+export type PlanId =
+  | "solar_300"
+  | "solar_1000"
+  | "solar_2000"
+  | "solar_10000"
+  | "solar_50000"
+  | "free"
 
 export interface Plan {
   id: PlanId
@@ -10,18 +16,88 @@ export interface Plan {
   cost: number
   perDay: number
   days: number
+  category?: "normal" | "vip"
+  limit?: string
+  image?: string
 }
 
 export const PLANS: Plan[] = [
-  { id: "free", name: "Free", tag: "No cost – activate once", blurb: "Claim ₹10 every day for 30 days. Activate once, earn always.", cost: 0, perDay: 10, days: 30 },
-  { id: "jio", name: "Jio", tag: "Best for beginners", blurb: "Start earning daily with India's most trusted network", cost: 599, perDay: 39, days: 30 },
-  { id: "airtel", name: "Airtel", tag: "Most popular", blurb: "Supercharge your daily income with premium returns", cost: 999, perDay: 66, days: 30 },
-  { id: "tata", name: "Tata", tag: "High returns", blurb: "Unlock powerful daily earnings backed by Tata trust", cost: 1499, perDay: 99, days: 30 },
-  { id: "tesla", name: "Tesla", tag: "Maximum profit", blurb: "The ultimate plan for maximum daily profit potential", cost: 1999, perDay: 133, days: 30 },
+  {
+    id: "free",
+    name: "Free Solar Trial Plan (₹0)",
+    tag: "Free Trial",
+    blurb: "Bina kisi payment ke turant shuru kare! Har din ₹10 free direct reward paye.",
+    cost: 0,
+    perDay: 10,
+    days: 30,
+    category: "normal",
+    limit: "Limit 1/1",
+    image: "/dairymilk/solar_panel.jpg",
+  },
+  {
+    id: "solar_300",
+    name: "Solar Starter 300 – Daily Income",
+    tag: "Sabse Popular",
+    blurb: "Har din ₹40 direct wallet me paye! Bas ₹300 lagao aur pure 60 din tak ₹2,400 kamao.",
+    cost: 300,
+    perDay: 40,
+    days: 60,
+    category: "normal",
+    limit: "Limit 0/10",
+    image: "/dairymilk/product.png",
+  },
+  {
+    id: "solar_1000",
+    name: "Solar Pro Grid 1000 – Daily Income",
+    tag: "High Demand",
+    blurb: "Har din ₹150 ki pakki daily income. 75 din me pure ₹11,250 ka guaranteed munafa.",
+    cost: 1000,
+    perDay: 150,
+    days: 75,
+    category: "normal",
+    limit: "Limit 0/10",
+    image: "/dairymilk/solar_panel.jpg",
+  },
+  {
+    id: "solar_2000",
+    name: "Solar Mega Station 2000 – Daily Income",
+    tag: "Bumper Kamaai",
+    blurb: "Har subah ₹330 automatic payout! 75 din me ₹24,750 ka solid return.",
+    cost: 2000,
+    perDay: 330,
+    days: 75,
+    category: "normal",
+    limit: "Limit 0/10",
+    image: "/dairymilk/product.png",
+  },
+  {
+    id: "solar_10000",
+    name: "Solar Industrial Plant – Super VIP",
+    tag: "Super VIP",
+    blurb: "Bade investors ki pehli pasand! Har din ₹1,900 income, 90 din me pure ₹1,71,000.",
+    cost: 10000,
+    perDay: 1900,
+    days: 90,
+    category: "vip",
+    limit: "Limit 0/10",
+    image: "/dairymilk/solar_panel.jpg",
+  },
+  {
+    id: "solar_50000",
+    name: "Solar Megawatt Farm – Royal VIP",
+    tag: "Royal King",
+    blurb: "Industrial Solar Farm ownership! Har din ₹12,000 direct bank withdrawal. 120 din me ₹14.4 Lakh ka bumper return.",
+    cost: 50000,
+    perDay: 12000,
+    days: 120,
+    category: "vip",
+    limit: "Limit 0/10",
+    image: "/dairymilk/bannerr.png",
+  },
 ]
 
 /** Withdrawal rules */
-export const WITHDRAW_MIN = 200        // minimum ₹200
+export const WITHDRAW_MIN = 180        // minimum ₹180 as per Dairy Milk rules
 export const WITHDRAW_FEE_PCT = 3      // 3% processing fee
 export const WITHDRAW_OFF_DAYS = [0, 6] // 0=Sunday, 6=Saturday — no withdrawals
 
@@ -30,10 +106,10 @@ export function canWithdrawToday(): boolean {
   return !WITHDRAW_OFF_DAYS.includes(day)
 }
 
-export const getPlan = (id: PlanId) => PLANS.find((p) => p.id === id)!
+export const getPlan = (id: PlanId) => PLANS.find((p) => p.id === id) || PLANS[0]
 const isPlanId = (id: unknown): id is PlanId => PLANS.some((p) => p.id === id)
 
-export const WELCOME_GIFT = 599
+export const WELCOME_GIFT = 50
 export const INVITE_BONUS = 100
 /** Extra bonus to referrer when referred user buys their first plan. */
 export const REFER_PLAN_BONUS = 50
@@ -60,6 +136,7 @@ export type Entry = { id: string; at: number; coins: number } & (
   | { kind: "claim"; planId: PlanId; day: number }
   | { kind: "buy"; planId: PlanId }
   | { kind: "invite" }
+  | { kind: "withdraw"; amount: number; method: string }
 )
 
 export interface State {
@@ -113,10 +190,21 @@ const tier = (o: Owned) => PLANS.findIndex((p) => p.id === o.planId)
 export const active = (s: State) => s.owned.filter((o) => !isDone(o)).sort((a, b) => tier(a) - tier(b))
 export const completed = (s: State) => s.owned.filter(isDone)
 
-/** When this plan pays next, or null once all its days are claimed. */
+/** Whether user has at least one active or purchased paid plan (required for withdrawal) */
+export function hasBoughtPaidPlan(s: State): boolean {
+  return s.owned.some((o) => o.planId !== "free")
+}
+
+/** When this plan pays next, or null once all its days are claimed.
+ * Day 1: Ready immediately upon activation.
+ * Subsequent days: Ready at start of the next calendar day (midnight 00:00:00).
+ */
 export function nextClaimAt(o: Owned): number | null {
   if (isDone(o)) return null
-  return o.lastClaimAt === null ? o.boughtAt : o.lastClaimAt + DAY_MS
+  if (o.lastClaimAt === null) return o.boughtAt
+  const d = new Date(o.lastClaimAt)
+  d.setHours(24, 0, 0, 0)
+  return d.getTime()
 }
 
 export const ready = (s: State, now: number) =>
@@ -188,20 +276,80 @@ export function collect(s: State, now: number, onlyId?: string): State {
   return next
 }
 
-/** Why a plan can't be bought right now, or null when it can. */
-export function cantBuy(s: State, planId: PlanId) {
-  if (active(s).some((o) => o.planId === planId)) return "running" as const
-  if (planId !== "free" && s.coins < getPlan(planId).cost) return "short" as const
+/** Purchase validation: Free plan limit 1/1, paid plans limit 10/10 */
+export function cantBuy(s: State, planId: PlanId): string | null {
+  if (planId === "free") {
+    if (s.owned.some((o) => o.planId === "free")) {
+      return "Free plan can only be claimed once per user"
+    }
+  }
+  const activeCount = s.owned.filter((o) => o.planId === planId && !isDone(o)).length
+  if (activeCount >= 10) {
+    return "Maximum limit reached for this plan (10/10)"
+  }
   return null
 }
 
+/** Ensure at most one free plan ever exists in owned array */
+export function sanitizeOwned(owned: Owned[]): Owned[] {
+  let freeFound = false
+  return owned.filter((o) => {
+    if (o.planId === "free") {
+      if (freeFound) return false
+      freeFound = true
+    }
+    return true
+  })
+}
+
+export function activatePlan(s: State, planId: PlanId, now: number, orderId?: string): State {
+  // STRICT: Never allow multiple free plans in the same account
+  if (planId === "free" && s.owned.some((o) => o.planId === "free")) {
+    return { ...s, owned: sanitizeOwned(s.owned) }
+  }
+  const existingId = orderId || uid(now)
+  if (s.owned.some((o) => o.id === existingId)) return { ...s, owned: sanitizeOwned(s.owned) }
+
+  const owned: Owned = { id: existingId, planId, claimed: 0, boughtAt: now, lastClaimAt: null }
+  return {
+    ...s,
+    owned: sanitizeOwned([owned, ...s.owned]),
+    history: [
+      { id: uid(now), at: now, coins: 0, kind: "buy", planId },
+      ...s.history,
+    ],
+  }
+}
+
 export function buy(s: State, planId: PlanId, now: number): State {
-  const why = cantBuy(s, planId)
-  if (why === "running") throw new Error("This plan is already running")
-  if (why === "short") throw new Error("Not enough coins")
+  const reason = cantBuy(s, planId)
+  if (reason) throw new Error(reason)
   const plan = getPlan(planId)
+  if (plan.cost > 0 && s.coins < plan.cost) {
+    throw new Error("Not enough coins")
+  }
   const owned: Owned = { id: uid(now), planId, claimed: 0, boughtAt: now, lastClaimAt: null }
-  return credit({ ...s, owned: [owned, ...s.owned] }, { id: uid(now), at: now, coins: -plan.cost, kind: "buy", planId })
+  const coinsDeduction = plan.cost > 0 ? -plan.cost : 0
+  return credit(
+    { ...s, owned: sanitizeOwned([owned, ...s.owned]) },
+    { id: uid(now), at: now, coins: coinsDeduction, kind: "buy", planId }
+  )
+}
+
+/** Processes a wallet withdrawal, deducting coins and recording the transaction */
+export function withdraw(s: State, amount: number, now: number, method = "upi"): State {
+  if (amount < WITHDRAW_MIN) throw new Error(`Minimum withdrawal is ₹${WITHDRAW_MIN}`)
+  if (s.coins < amount) throw new Error("Withdrawal amount exceeds your available balance")
+  if (!hasBoughtPaidPlan(s)) throw new Error("Pehle koi paid solar plan active karein")
+
+  return {
+    ...s,
+    coins: s.coins - amount,
+    history: [
+      { id: uid(now), at: now, coins: -amount, kind: "withdraw", amount, method },
+      ...s.history,
+    ],
+  }
 }
 
 export function invite(s: State, now: number): State {
@@ -223,7 +371,7 @@ export function newPlayer(name: string, now: number, invitedBy?: string): State 
 export function demoPlayer(now: number): State {
   // ponytail: claims land at the same clock time each day; a load in the first minute after midnight sees yesterday as a gap
   const at = (d: number) => now + d * DAY_MS - 60_000
-  let s = buy(newPlayer("Rahul", at(-14)), "jio", at(-14))
+  let s = activatePlan(newPlayer("Rahul", at(-14)), "solar_300", at(-14))
   for (let d = -14; d < 0; d++) {
     if (d === -4) continue // a missed day: the streak starts over
     s = collect(s, at(d))

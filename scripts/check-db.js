@@ -1,5 +1,6 @@
 const postgres = require('postgres');
-const db = postgres('postgresql://postgres:GBNR1Ql0jDzraOlq@db.dlkkvikhajfujitopkzk.supabase.co:5432/postgres', { ssl: 'require' });
+// Run: node --env-file=.env.local scripts/check-db.js
+const db = postgres(process.env.DATABASE_URL, { ssl: 'require' });
 
 (async () => {
   // Check all tables

@@ -3,10 +3,12 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useEffect, useState, Suspense } from "react"
 import { CheckCircle2Icon, ClockIcon, Loader2Icon, XCircleIcon } from "lucide-react"
+import { useStore } from "@/lib/store"
 
 function SuccessContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { activatePlan } = useStore()
   const orderId = searchParams.get("orderId")
   const [status, setStatus] = useState<"polling" | "success" | "failed" | "timeout">("polling")
   const [pollCount, setPollCount] = useState(0)
@@ -31,6 +33,13 @@ function SuccessContent() {
         const data = await res.json()
 
         if (data.status === "SUCCESS" || data.credited) {
+          if (data.planId) {
+            try {
+              activatePlan(data.planId)
+            } catch {
+              // ignore if already active
+            }
+          }
           setStatus("success")
           clearInterval(interval)
         } else if (data.status === "FAILED") {
@@ -43,39 +52,38 @@ function SuccessContent() {
     }, 3000)
 
     return () => clearInterval(interval)
-  }, [orderId, status])
+  }, [orderId, status, activatePlan])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-6 bg-[#0a0f1d]">
       {status === "polling" && (
         <div className="flex flex-col items-center gap-4 text-center">
-          <div className="relative flex size-20 items-center justify-center rounded-full" style={{ background: "linear-gradient(135deg,#6063ee20,#8083ff20)" }}>
-            <Loader2Icon className="size-10 animate-spin" style={{ color: "#8083ff" }} />
+          <div className="relative flex size-20 items-center justify-center rounded-full bg-amber-500/15 ring-2 ring-amber-400/40">
+            <Loader2Icon className="size-10 animate-spin text-amber-400" />
           </div>
           <h1 className="text-2xl font-bold text-white">Processing Payment…</h1>
           <p className="max-w-xs text-sm text-white/60">
             Waiting for payment confirmation. This usually takes a few seconds.
           </p>
-          <div className="flex items-center gap-2 rounded-full px-4 py-2 text-xs" style={{ background: "#ffffff10" }}>
-            <ClockIcon className="size-3.5 text-white/40" />
-            <span className="text-white/50">Checking… ({pollCount}/{MAX_POLLS})</span>
+          <div className="flex items-center gap-2 rounded-full px-4 py-2 text-xs bg-white/10">
+            <ClockIcon className="size-3.5 text-amber-300" />
+            <span className="text-white/60">Checking… ({pollCount}/{MAX_POLLS})</span>
           </div>
         </div>
       )}
 
       {status === "success" && (
         <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex size-20 items-center justify-center rounded-full" style={{ background: "#4edea320" }}>
-            <CheckCircle2Icon className="size-10" style={{ color: "#4edea3" }} />
+          <div className="flex size-20 items-center justify-center rounded-full bg-emerald-500/20 ring-2 ring-emerald-400/50">
+            <CheckCircle2Icon className="size-10 text-emerald-400" />
           </div>
           <h1 className="text-2xl font-bold text-white">Payment Successful!</h1>
-          <p className="max-w-xs text-sm text-white/60">
-            Your plan has been activated. Start earning daily rewards now!
+          <p className="max-w-xs text-sm text-white/70">
+            Your solar investment plan has been activated. Start earning daily returns now!
           </p>
           <button
             onClick={() => router.push("/")}
-            className="mt-2 rounded-full px-8 py-3 text-sm font-bold text-white shadow-lg transition-all active:scale-95"
-            style={{ background: "linear-gradient(135deg,#006c49,#4edea3)", boxShadow: "0 6px 20px #4edea330" }}
+            className="mt-2 rounded-full px-8 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-amber-500/25 transition-all active:scale-95 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:opacity-95 cursor-pointer"
           >
             Go to Home
           </button>

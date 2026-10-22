@@ -25,11 +25,12 @@ export function Logo({ className }: { className?: string }) {
 
 /** Map planId → company logo image path. Free has no company logo. */
 const PLAN_LOGOS: Record<PlanId, string | null> = {
-  free: null,
-  jio: "/jio.png",
-  airtel: "/airtel.png",
-  tata: "/tata.png",
-  tesla: "/tesla.png",
+  solar_300: "/dairymilk/product.png",
+  solar_1000: "/dairymilk/solar_panel.jpg",
+  solar_2000: "/dairymilk/product.png",
+  solar_10000: "/dairymilk/solar_panel.jpg",
+  solar_50000: "/dairymilk/bannerr.png",
+  free: "/dairymilk/solar_panel.jpg",
 }
 
 export function PlanIcon({ planId, className }: { planId: PlanId; className?: string }) {

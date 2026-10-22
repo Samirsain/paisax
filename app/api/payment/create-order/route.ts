@@ -26,18 +26,31 @@ export async function POST(req: NextRequest) {
   const uid = cookieStore.get("paisax_uid")?.value
   if (!uid) return NextResponse.json({ error: "Not logged in" }, { status: 401 })
 
-  const { planId } = await req.json()
-  if (!planId) return NextResponse.json({ error: "Missing planId" }, { status: 400 })
+  const body = await req.json().catch(() => ({}))
+  const planId = body.planId
+  const directAmount = parseInt(body.amount, 10)
 
-  let plan: ReturnType<typeof getPlan>
-  try {
-    plan = getPlan(planId as PlanId)
-  } catch {
-    return NextResponse.json({ error: "Invalid plan" }, { status: 400 })
+  let orderAmount = 0
+  let targetPlanId = ""
+
+  if (planId) {
+    let plan: ReturnType<typeof getPlan>
+    try {
+      plan = getPlan(planId as PlanId)
+    } catch {
+      return NextResponse.json({ error: "Invalid plan" }, { status: 400 })
+    }
+    orderAmount = plan.cost
+    targetPlanId = plan.id
+  } else if (!isNaN(directAmount) && directAmount > 0) {
+    orderAmount = directAmount
+    targetPlanId = "recharge"
+  } else {
+    return NextResponse.json({ error: "Missing planId or recharge amount" }, { status: 400 })
   }
 
   // ── Amount limit check ────────────────────────────────────────────────
-  if (plan.cost < DEPOSIT_MIN || plan.cost > DEPOSIT_MAX) {
+  if (orderAmount < DEPOSIT_MIN || orderAmount > DEPOSIT_MAX) {
     return NextResponse.json(
       { error: `Amount must be between ₹${DEPOSIT_MIN} and ₹${DEPOSIT_MAX}` },
       { status: 400 }
@@ -54,7 +67,7 @@ export async function POST(req: NextRequest) {
   // ── Save order to DB before calling gateway ───────────────────────────
   await db`
     INSERT INTO orders (id, user_id, plan_id, amount, status, created_at)
-    VALUES (${orderId}, ${uid}, ${planId}, ${plan.cost}, 'PENDING', now())
+    VALUES (${orderId}, ${uid}, ${targetPlanId}, ${orderAmount}, 'PENDING', now())
     ON CONFLICT DO NOTHING
   `.catch(async () => {
     // Create orders table on first use
@@ -76,7 +89,7 @@ export async function POST(req: NextRequest) {
     `
     await db`
       INSERT INTO orders (id, user_id, plan_id, amount, status, created_at)
-      VALUES (${orderId}, ${uid}, ${planId}, ${plan.cost}, 'PENDING', now())
+      VALUES (${orderId}, ${uid}, ${targetPlanId}, ${orderAmount}, 'PENDING', now())
     `
   })
 
@@ -90,7 +103,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await AeropayService.createPaymentSession({
       orderNo: orderId,
-      amount: plan.cost.toFixed(2), // "599.00" format
+      amount: orderAmount.toFixed(2),
     })
 
     // Update order with payment URL

@@ -9,9 +9,11 @@ export interface AuthUser {
   inviteCode: string
 }
 
-/** Generates a deterministic avatar URL from the user's phone number. */
+/** Generates a deterministic avatar URL from the user's phone number using local avatars. */
 export function avatarOf(user: AuthUser) {
-  return `https://api.dicebear.com/9.x/thumbs/svg?seed=${user.phone}&radius=50`
+  const lastChar = user.phone ? user.phone.charCodeAt(user.phone.length - 1) : 0
+  const n = (lastChar % 4) + 1
+  return `/avatar/${n}.png`
 }
 
 interface AuthCtx {

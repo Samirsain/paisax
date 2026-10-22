@@ -4,11 +4,11 @@
  */
 
 // ── Deposit limits ──────────────────────────────────────────────────────────
-export const DEPOSIT_MIN = 200    // ₹200
+export const DEPOSIT_MIN = 285    // ₹285 (Product A min)
 export const DEPOSIT_MAX = 50_000 // ₹50,000
 
 // ── Withdrawal limits ───────────────────────────────────────────────────────
-export const PAYOUT_MIN = 100     // ₹100
+export const PAYOUT_MIN = 180     // ₹180 (Min withdraw as per Dairy Milk rules)
 export const PAYOUT_MAX = 50_000  // ₹50,000
 
 // ── AeroPay callback IP (for webhook verification logging) ──────────────────

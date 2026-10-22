@@ -1,155 +1,361 @@
 "use client"
 
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import { EyeIcon, EyeOffIcon } from "lucide-react"
-import { Logo } from "@/components/marks"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState, Suspense } from "react"
+import Image from "next/image"
+import { ArrowRightIcon, EyeIcon, EyeOffIcon, LockIcon, PhoneIcon, UserIcon, GiftIcon, SunMediumIcon } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 
-// Colour tokens — warm beige luxury palette
-const C = {
-  bg:        "#FAF7F2",   // warm cream
-  card:      "#FFFFFF",
-  border:    "#E8DDD0",
-  ink:       "#2C1A0E",   // deep espresso
-  inkMid:    "#6B4C36",   // warm brown
-  inkSoft:   "#A08878",   // muted tan
-  primary:   "#C9853A",   // warm amber-gold
-  primaryDk: "#9E6425",   // deep gold
-  primaryLt: "#FFF3E0",   // pale amber
-  emerald:   "#2A6B4C",   // deep forest green
-  emeraldLt: "#E8F5EE",   // pale mint
-  rose:      "#B85C6E",   // dusty rose
-  shadow:    "rgba(44,26,14,0.08)",
-  // Dark brand hero — the logo is gold/white and only reads on dark
-  hero:      "radial-gradient(circle at 50% 38%, rgba(242,179,61,0.22), transparent 50%), radial-gradient(120% 90% at 50% 0%, #3A2610 0%, #120C06 65%)",
-}
+function AuthForm() {
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get("tab") === "register" ? "register" : "login"
+  const inviteParam = searchParams.get("invite") || ""
 
-export default function LoginPage() {
-  const { user, ready, login } = useAuth()
+  const { user, ready, login, signup } = useAuth()
   const router = useRouter()
+
+  const [tab, setTab] = useState<"login" | "register">(initialTab)
   const [phone, setPhone] = useState("")
   const [pass, setPass] = useState("")
+  const [confirmPass, setConfirmPass] = useState("")
+  const [name, setName] = useState("")
+  const [inviteCode, setInviteCode] = useState(inviteParam)
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => { if (ready && user) router.replace("/") }, [ready, user, router])
+  useEffect(() => {
+    if (ready && user) router.replace("/")
+  }, [ready, user, router])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setError(""); setLoading(true)
-    const err = await login(phone, pass)
-    if (err) { setError(err); setLoading(false) } else { router.replace("/") }
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    const cleanPhone = phone.replace(/\D/g, "")
+    if (cleanPhone.length !== 10) {
+      setError("Please enter a valid 10-digit mobile number")
+      setLoading(false)
+      return
+    }
+
+    const err = await login(cleanPhone, pass)
+    if (err) {
+      setError(err)
+      setLoading(false)
+    } else {
+      router.replace("/")
+    }
+  }
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    const cleanPhone = phone.replace(/\D/g, "")
+    if (cleanPhone.length !== 10) {
+      setError("Please enter a valid 10-digit mobile number")
+      setLoading(false)
+      return
+    }
+
+    if (pass.length < 6) {
+      setError("Password must be at least 6 characters")
+      setLoading(false)
+      return
+    }
+
+    if (confirmPass && pass !== confirmPass) {
+      setError("Passwords do not match")
+      setLoading(false)
+      return
+    }
+
+    const finalName = name.trim() || `Solar_${cleanPhone.slice(-4)}`
+    const err = await signup(finalName, cleanPhone, pass)
+    if (err) {
+      setError(err)
+      setLoading(false)
+    } else {
+      // Trigger Welcome Modal right after signup
+      sessionStorage.setItem("solar_just_registered", "true")
+      router.replace("/")
+    }
   }
 
   return (
-    <div className="min-h-dvh flex flex-col" style={{ background: C.bg, fontFamily: "var(--font-dm), system-ui, sans-serif" }}>
+    <div className="relative min-h-screen bg-[#080d1a] flex flex-col items-center justify-start pb-10 overflow-x-hidden font-sans">
+      
+      {/* Top Banner illustration with bannerr.png (PaisaX Solar Banner) */}
+      <div className="relative w-full max-w-md h-56 sm:h-64 overflow-hidden">
+        <Image
+          src="/dairymilk/bannerr.png"
+          alt="PaisaX Solar Banner"
+          fill
+          className="object-cover object-center"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#080d1a]" />
+      </div>
 
-      {/* Brand hero */}
-      <header className="rounded-b-[32px] px-5 pt-10 pb-20 text-center" style={{ background: C.hero }}>
-        <Logo className="mx-auto size-36" />
-        <h1 className="mt-3" style={{ fontFamily: "var(--font-playfair)", fontSize: "26px", fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>
-          Welcome back
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
-          Sign in to your PaisaX account
-        </p>
-      </header>
-
-      <div className="relative -mt-12 flex flex-col flex-1 px-5 pb-10 max-w-sm mx-auto w-full">
-
-        {/* Form card */}
-        <div className="rounded-2xl p-6" style={{ background: C.card, border: `1px solid ${C.border}`, boxShadow: `0 12px 32px ${C.shadow}` }}>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-
-            {/* Phone */}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="phone" className="text-xs font-bold uppercase tracking-widest" style={{ color: C.inkMid }}>
-                Mobile Number
-              </label>
-              <div className="flex items-center rounded-xl overflow-hidden" style={{ border: `1.5px solid ${C.border}`, background: C.bg }}>
-                <span className="px-3 py-3 text-sm font-semibold border-r" style={{ color: C.inkSoft, borderColor: C.border }}>+91</span>
-                <input id="phone" type="tel" inputMode="numeric" placeholder="10-digit number" maxLength={10}
-                  value={phone} onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "")); setError("") }}
-                  className="flex-1 px-3 py-3 bg-transparent text-sm outline-none"
-                  style={{ color: C.ink }}
-                  required />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="pass" className="text-xs font-bold uppercase tracking-widest" style={{ color: C.inkMid }}>
-                Password
-              </label>
-              <div className="flex items-center rounded-xl overflow-hidden" style={{ border: `1.5px solid ${C.border}`, background: C.bg }}>
-                <input id="pass" type={showPass ? "text" : "password"} placeholder="Your password"
-                  value={pass} onChange={(e) => { setPass(e.target.value); setError("") }}
-                  className="flex-1 px-4 py-3 bg-transparent text-sm outline-none"
-                  style={{ color: C.ink }}
-                  required />
-                <button type="button" onClick={() => setShowPass(v => !v)}
-                  className="px-3 py-3 transition-colors" style={{ color: C.inkSoft }}>
-                  {showPass ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <p role="alert" className="rounded-xl px-4 py-2.5 text-sm" style={{ background: "#FFF0F0", color: "#C0392B", border: "1px solid #FECACA" }}>
-                {error}
-              </p>
-            )}
-
-            <button type="submit" disabled={loading}
-              className="w-full rounded-xl py-3.5 text-sm font-bold text-white shadow-md transition-all active:scale-[0.98] disabled:opacity-60 mt-1"
-              style={{ background: `linear-gradient(135deg, ${C.primaryDk}, ${C.primary})`, boxShadow: `0 4px 16px ${C.primary}40` }}>
-              {loading
-                ? <span className="flex items-center justify-center gap-2"><span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Signing in…</span>
-                : "Sign In"}
-            </button>
-          </form>
-
-          <p className="mt-5 text-center text-sm" style={{ color: C.inkSoft }}>
-            New to PaisaX?{" "}
-            <Link href="/signup" className="font-bold transition-colors hover:underline" style={{ color: C.primary }}>
-              Create free account →
-            </Link>
-          </p>
-        </div>
-
-        {/* Earn reminder card */}
-        <div className="rounded-2xl p-4 mt-5 flex items-center gap-3"
-          style={{ background: C.emeraldLt, border: `1px solid ${C.emerald}22` }}>
-          <span className="text-xl">💰</span>
-          <div>
-            <p className="text-sm font-bold" style={{ color: C.emerald }}>Your daily earnings are waiting</p>
-            <p className="text-xs mt-0.5" style={{ color: `${C.emerald}99` }}>Claim coins as soon as you log in</p>
+      {/* Main Form Container */}
+      <div className="relative -mt-16 w-full max-w-[360px] px-4 z-10">
+        
+        {/* Floating circular Solar logo badge matching logo.png */}
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-20">
+          <div className="relative size-24 rounded-full border-4 border-white bg-[#0f172a] shadow-2xl overflow-hidden ring-3 ring-amber-400/60">
+            <Image
+              src="/dairymilk/logo.png"
+              alt="PaisaX Solar"
+              fill
+              className="object-cover"
+              priority
+            />
           </div>
         </div>
 
-        {/* Stats strip */}
-        <div className="mt-3 grid grid-cols-3 gap-3">
-          {[
-            { emoji: "🔒", label: "SSL Secured", sub: "Bank-grade" },
-            { emoji: "⚡", label: "Daily Earn", sub: "Claim anytime" },
-            { emoji: "✅", label: "Verified", sub: "1,200+ users" },
-          ].map(({ emoji, label, sub }) => (
-            <div key={label} className="flex flex-col items-center gap-1 rounded-xl p-3 text-center"
-              style={{ background: C.card, border: `1px solid ${C.border}` }}>
-              <span className="text-lg">{emoji}</span>
-              <p className="text-[11px] font-bold" style={{ color: C.ink }}>{label}</p>
-              <p className="text-[10px]" style={{ color: C.inkSoft }}>{sub}</p>
-            </div>
-          ))}
-        </div>
+        {/* Form Card */}
+        <div className="relative rounded-[32px] bg-white px-6 pt-14 pb-7 shadow-2xl border border-amber-100">
+          
+          {/* Tabs: Login / Register with golden underline indicator */}
+          <div className="flex items-center justify-around border-b border-amber-100 pb-3 mb-6">
+            <button
+              type="button"
+              onClick={() => { setTab("login"); setError("") }}
+              className="relative px-4 pb-2 transition-colors cursor-pointer"
+            >
+              <span className={`text-lg font-extrabold ${tab === "login" ? "text-amber-800" : "text-slate-400"}`}>
+                Login
+              </span>
+              {tab === "login" && (
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3.5px] w-16 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full">
+                  <span className="absolute -right-1 -top-[2px] size-2 rounded-full bg-amber-600" />
+                </div>
+              )}
+            </button>
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-[10px]" style={{ color: C.inkSoft }}>
-          © 2024 PaisaX · All rights reserved
-        </p>
+            <button
+              type="button"
+              onClick={() => { setTab("register"); setError("") }}
+              className="relative px-4 pb-2 transition-colors cursor-pointer"
+            >
+              <span className={`text-lg font-extrabold ${tab === "register" ? "text-amber-800" : "text-slate-400"}`}>
+                Register
+              </span>
+              {tab === "register" && (
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3.5px] w-16 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full">
+                  <span className="absolute -right-1 -top-[2px] size-2 rounded-full bg-amber-600" />
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* Error notice */}
+          {error && (
+            <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600 border border-red-200">
+              {error}
+            </div>
+          )}
+
+          {tab === "login" ? (
+            /* Login Form */
+            <form onSubmit={handleLogin} className="flex flex-col gap-4">
+              
+              {/* Phone input */}
+              <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/10 transition-all">
+                <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
+                  <PhoneIcon className="size-4.5" />
+                </span>
+                <span className="px-2.5 text-sm font-bold text-slate-800 border-r border-amber-200">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="Mobile number"
+                  maxLength={10}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                  required
+                />
+              </div>
+
+              {/* Password input */}
+              <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/10 transition-all">
+                <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
+                  <LockIcon className="size-4.5" />
+                </span>
+                <input
+                  type={showPass ? "text" : "password"}
+                  placeholder="Password"
+                  value={pass}
+                  onChange={(e) => setPass(e.target.value)}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="px-2 text-slate-400 hover:text-amber-600 transition-colors"
+                >
+                  {showPass ? <EyeOffIcon className="size-4.5" /> : <EyeIcon className="size-4.5" />}
+                </button>
+              </div>
+
+              {/* Login Now CTA Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-2 flex w-full items-center justify-between rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3 pl-6 pr-3 text-base font-extrabold text-white shadow-xl shadow-amber-500/30 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+              >
+                <span>{loading ? "Signing in…" : "Login Now"}</span>
+                <span className="flex size-8.5 items-center justify-center rounded-full bg-white text-amber-700 shadow-sm">
+                  <ArrowRightIcon className="size-4.5" strokeWidth={2.5} />
+                </span>
+              </button>
+
+              {/* Don't have an account link */}
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-700">
+                <span className="tracking-tighter">▪▪</span>
+                <button
+                  type="button"
+                  onClick={() => { setTab("register"); setError("") }}
+                  className="hover:underline cursor-pointer font-bold"
+                >
+                  Don't have an account? <span className="underline">Register</span>
+                </button>
+                <span className="tracking-tighter">▪▪</span>
+              </div>
+            </form>
+          ) : (
+            /* Register Form */
+            <form onSubmit={handleRegister} className="flex flex-col gap-3.5">
+              
+              {/* Name */}
+              <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 transition-all">
+                <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
+                  <UserIcon className="size-4.5" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Your Name (optional)"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Phone */}
+              <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 transition-all">
+                <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
+                  <PhoneIcon className="size-4.5" />
+                </span>
+                <span className="px-2.5 text-sm font-bold text-slate-800 border-r border-amber-200">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="Mobile number"
+                  maxLength={10}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                  required
+                />
+              </div>
+
+              {/* Password */}
+              <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 transition-all">
+                <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
+                  <LockIcon className="size-4.5" />
+                </span>
+                <input
+                  type={showPass ? "text" : "password"}
+                  placeholder="Set Password (min 6 chars)"
+                  value={pass}
+                  onChange={(e) => setPass(e.target.value)}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="px-2 text-slate-400 hover:text-amber-600"
+                >
+                  {showPass ? <EyeOffIcon className="size-4.5" /> : <EyeIcon className="size-4.5" />}
+                </button>
+              </div>
+
+              {/* Confirm Password */}
+              <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 transition-all">
+                <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
+                  <LockIcon className="size-4.5" />
+                </span>
+                <input
+                  type="password"
+                  placeholder="Confirm Password"
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                  required
+                />
+              </div>
+
+              {/* Invite Code */}
+              <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 transition-all">
+                <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
+                  <GiftIcon className="size-4.5" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Invite Code (optional)"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400 uppercase"
+                />
+              </div>
+
+              {/* Register Now CTA Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="mt-2 flex w-full items-center justify-between rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3 pl-6 pr-3 text-base font-extrabold text-white shadow-xl shadow-amber-500/30 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+              >
+                <span>{loading ? "Creating account…" : "Register Now"}</span>
+                <span className="flex size-8.5 items-center justify-center rounded-full bg-white text-amber-700 shadow-sm">
+                  <ArrowRightIcon className="size-4.5" strokeWidth={2.5} />
+                </span>
+              </button>
+
+              {/* Already have an account link */}
+              <div className="mt-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-700">
+                <span className="tracking-tighter">▪▪</span>
+                <button
+                  type="button"
+                  onClick={() => { setTab("login"); setError("") }}
+                  className="hover:underline cursor-pointer font-bold"
+                >
+                  Already have an account? <span className="underline">Login</span>
+                </button>
+                <span className="tracking-tighter">▪▪</span>
+              </div>
+            </form>
+          )}
+
+        </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#080d1a]" />}>
+      <AuthForm />
+    </Suspense>
   )
 }
