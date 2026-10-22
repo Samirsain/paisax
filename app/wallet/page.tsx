@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { CalendarCheckIcon, GiftIcon, ShoppingBagIcon, UserPlusIcon, WalletIcon, ZapIcon } from "lucide-react"
+import { BanknoteIcon, CalendarCheckIcon, GiftIcon, ShoppingBagIcon, UserPlusIcon, WalletIcon, ZapIcon } from "lucide-react"
 import { Skeleton } from "@/components/marks"
 import { Button } from "@/components/ui/button"
 import { getPlan, levelOf, type Entry } from "@/lib/game"
@@ -59,12 +59,15 @@ export default function WalletPage() {
         <p className="mt-2 text-body-md opacity-85">
           Lifetime {fmt(state.lifetime)} · Level {levelOf(state.lifetime).level}
         </p>
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <Link href="/plans" className="flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-label-lg text-primary shadow-sm active:scale-[0.98]">
-            <ShoppingBagIcon className="size-5" aria-hidden /> Buy a plan
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          <Link href="/plans" className="flex h-12 items-center justify-center gap-1.5 rounded-xl bg-white text-label-lg text-primary shadow-sm active:scale-[0.98]">
+            <ShoppingBagIcon className="size-4" aria-hidden /> Plans
           </Link>
-          <Link href="/refer" className="flex h-12 items-center justify-center gap-2 rounded-xl bg-white/20 text-label-lg text-white active:scale-[0.98]">
-            <UserPlusIcon className="size-5" aria-hidden /> Invite
+          <Link href="/wallet/withdraw" className="flex h-12 items-center justify-center gap-1.5 rounded-xl bg-white text-label-lg shadow-sm active:scale-[0.98]" style={{ color: "#006c49" }}>
+            <BanknoteIcon className="size-4" aria-hidden /> Withdraw
+          </Link>
+          <Link href="/refer" className="flex h-12 items-center justify-center gap-1.5 rounded-xl bg-white/20 text-label-lg text-white active:scale-[0.98]">
+            <UserPlusIcon className="size-4" aria-hidden /> Invite
           </Link>
         </div>
       </section>

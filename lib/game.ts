@@ -1,6 +1,6 @@
-﻿// Pure game rules for PaisaX. Daily earnings and streak logic.
+// Pure game rules for PaisaX. Daily earnings and streak logic.
 
-export type PlanId = "jio" | "airtel" | "tata" | "tesla"
+export type PlanId = "free" | "jio" | "airtel" | "tata" | "tesla"
 
 export interface Plan {
   id: PlanId
@@ -13,11 +13,22 @@ export interface Plan {
 }
 
 export const PLANS: Plan[] = [
+  { id: "free", name: "Free", tag: "No cost – activate once", blurb: "Claim ₹10 every day forever. Activate once, earn always.", cost: 0, perDay: 10, days: 3650 },
   { id: "jio", name: "Jio", tag: "Best for beginners", blurb: "Start earning daily with India's most trusted network", cost: 599, perDay: 39, days: 30 },
   { id: "airtel", name: "Airtel", tag: "Most popular", blurb: "Supercharge your daily income with premium returns", cost: 999, perDay: 66, days: 30 },
   { id: "tata", name: "Tata", tag: "High returns", blurb: "Unlock powerful daily earnings backed by Tata trust", cost: 1499, perDay: 99, days: 30 },
   { id: "tesla", name: "Tesla", tag: "Maximum profit", blurb: "The ultimate plan for maximum daily profit potential", cost: 1999, perDay: 133, days: 30 },
 ]
+
+/** Withdrawal rules */
+export const WITHDRAW_MIN = 200        // minimum ₹200
+export const WITHDRAW_FEE_PCT = 3      // 3% processing fee
+export const WITHDRAW_OFF_DAYS = [0, 6] // 0=Sunday, 6=Saturday — no withdrawals
+
+export function canWithdrawToday(): boolean {
+  const day = new Date().getDay()
+  return !WITHDRAW_OFF_DAYS.includes(day)
+}
 
 export const getPlan = (id: PlanId) => PLANS.find((p) => p.id === id)!
 const isPlanId = (id: unknown): id is PlanId => PLANS.some((p) => p.id === id)
@@ -180,7 +191,7 @@ export function collect(s: State, now: number, onlyId?: string): State {
 /** Why a plan can't be bought right now, or null when it can. */
 export function cantBuy(s: State, planId: PlanId) {
   if (active(s).some((o) => o.planId === planId)) return "running" as const
-  if (s.coins < getPlan(planId).cost) return "short" as const
+  if (planId !== "free" && s.coins < getPlan(planId).cost) return "short" as const
   return null
 }
 

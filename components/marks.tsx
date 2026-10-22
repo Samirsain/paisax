@@ -1,4 +1,4 @@
-import { CrownIcon, GemIcon, RocketIcon, SproutIcon } from "lucide-react"
+import { CrownIcon, GemIcon, GiftIcon, RocketIcon, SproutIcon } from "lucide-react"
 import Image from "next/image"
 import type { PlanId } from "@/lib/game"
 import { cn } from "@/lib/utils"
@@ -16,17 +16,15 @@ export const CoinIcon = ({ className }: { className?: string }) => (
 /** The Stitch logo redrawn: indigo tile, open ring, green dot, and a coin where the currency sign was. */
 export function Logo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 96 96" className={cn("size-8 shrink-0", className)} aria-hidden>
-      <rect width="96" height="96" rx="24" fill="#6366f1" />
-      <path d="M26.5 47.5a21 21 0 1 1 21 21" fill="none" stroke="#fff" strokeWidth="6.5" strokeLinecap="round" />
-      <circle cx="47.5" cy="47.5" r="10.5" fill="#10b981" />
-      <circle cx="47.5" cy="47.5" r="5.5" fill="none" stroke="#fff" strokeWidth="2.5" />
-      <circle cx="67.5" cy="31" r="8" fill="#10b981" stroke="#6366f1" strokeWidth="3.5" />
-    </svg>
+    // Drop shadow keeps the white "PAISAX" wordmark readable on light backgrounds.
+    <span className={cn("relative block size-8 shrink-0", className)} aria-hidden>
+      <Image src="/logo.png" alt="" fill sizes="128px" className="object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]" priority />
+    </span>
   )
 }
 
 const TILES: Record<PlanId, { icon: typeof RocketIcon; tile: string }> = {
+  free: { icon: GiftIcon, tile: "bg-mint/30 text-on-mint" },
   jio: { icon: RocketIcon, tile: "bg-primary-fixed text-primary" },
   airtel: { icon: SproutIcon, tile: "bg-rose-soft text-rose" },
   tata: { icon: GemIcon, tile: "bg-amber-soft text-amber" },
