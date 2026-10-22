@@ -18,24 +18,35 @@ export function Logo({ className }: { className?: string }) {
   return (
     // Drop shadow keeps the white "PAISAX" wordmark readable on light backgrounds.
     <span className={cn("relative block size-8 shrink-0", className)} aria-hidden>
-      <Image src="/logo.png" alt="" fill sizes="128px" className="object-contain drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]" priority />
+      <Image src="/logo.png" alt="" fill sizes="128px" className="object-contain" priority />
     </span>
   )
 }
 
-const TILES: Record<PlanId, { icon: typeof RocketIcon; tile: string }> = {
-  free: { icon: GiftIcon, tile: "bg-mint/30 text-on-mint" },
-  jio: { icon: RocketIcon, tile: "bg-primary-fixed text-primary" },
-  airtel: { icon: SproutIcon, tile: "bg-rose-soft text-rose" },
-  tata: { icon: GemIcon, tile: "bg-amber-soft text-amber" },
-  tesla: { icon: CrownIcon, tile: "bg-mint/35 text-claim" },
+/** Map planId → company logo image path. Free has no company logo. */
+const PLAN_LOGOS: Record<PlanId, string | null> = {
+  free: null,
+  jio: "/jio.png",
+  airtel: "/airtel.png",
+  tata: "/tata.png",
+  tesla: "/tesla.png",
 }
 
 export function PlanIcon({ planId, className }: { planId: PlanId; className?: string }) {
-  const { icon: Icon, tile } = TILES[planId]
+  const logo = PLAN_LOGOS[planId]
+
+  if (logo) {
+    return (
+      <span aria-hidden className={cn("inline-flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-black/5 shadow-sm p-1.5", className)}>
+        <Image src={logo} alt="" width={56} height={56} unoptimized className="size-full rounded-full object-contain" />
+      </span>
+    )
+  }
+
+  // Free plan fallback: gift icon
   return (
-    <span aria-hidden className={cn("inline-flex size-12 shrink-0 items-center justify-center rounded-xl", tile, className)}>
-      <Icon className="size-[45%]" strokeWidth={2} />
+    <span aria-hidden className={cn("inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-mint/30 text-on-mint ring-1 ring-mint/40", className)}>
+      <GiftIcon className="size-[50%]" strokeWidth={2} />
     </span>
   )
 }

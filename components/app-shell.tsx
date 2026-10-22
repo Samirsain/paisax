@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
@@ -54,31 +54,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col bg-background md:shadow-[0_0_0_1px_#e4e6f5,0_24px_64px_-24px_rgb(19_27_46/0.18)]">
-      <header className="sticky top-0 z-40 bg-white/80 pt-[env(safe-area-inset-top)] shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl">
-        <div className="flex h-16 items-center justify-between gap-2 px-4">
+      <header className="sticky top-0 z-40 border-b border-border bg-white pt-[env(safe-area-inset-top)]">
+        <div className="flex h-14 items-center justify-between px-4">
           {title ? (
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 aria-label="Back"
                 onClick={() => (history.length > 1 ? router.back() : router.push("/"))}
-                className="-ml-2 flex size-11 items-center justify-center rounded-full text-on-surface hover:bg-surface-high"
+                className="-ml-2 flex size-10 items-center justify-center rounded-full text-on-surface hover:bg-surface-high"
               >
-                <ChevronLeftIcon className="size-6" />
+                <ChevronLeftIcon className="size-5" />
               </button>
               <h1 className="text-headline-sm text-on-surface">{title}</h1>
             </div>
           ) : (
-            <Link href="/" className="flex items-center gap-2 rounded-lg">
-              <Logo />
-              <span className="text-headline-sm tracking-tight text-primary">PaisaX</span>
+            <Link href="/" className="flex items-center gap-2">
+              <Logo className="size-9" />
+              <span className="text-lg font-bold tracking-tight text-on-surface">PaisaX</span>
             </Link>
           )}
-          <div className="flex items-center gap-1">
-            <Link href="/profile" aria-label="Profile" aria-current={path === "/profile" ? "page" : undefined} className="flex size-11 items-center justify-center rounded-full">
-              <Avatar src={avatarOf(user)} />
-            </Link>
-          </div>
+          <Link href="/profile" aria-label="Profile" aria-current={path === "/profile" ? "page" : undefined} className="flex size-10 items-center justify-center rounded-full hover:bg-surface-low">
+            <Avatar src={avatarOf(user)} className="size-9" />
+          </Link>
         </div>
       </header>
 

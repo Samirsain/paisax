@@ -12,7 +12,7 @@ import { fmt, useStore } from "@/lib/store"
 
 /** Confirm, then redirect to AeroPay payment gateway. */
 export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: () => void }) {
-  const { state } = useStore()
+  const { state, buy } = useStore()
   const router = useRouter()
   const [shown, setShown] = useState(planId)
   const [done, setDone] = useState(false)
@@ -35,6 +35,19 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
   async function handlePay() {
     setPaying(true)
     setPayError("")
+
+    // Free plan: activate directly, no payment needed
+    if (plan.cost === 0) {
+      try {
+        buy(shown!)
+        setDone(true)
+      } catch (err: unknown) {
+        setPayError(err instanceof Error ? err.message : "Failed to activate plan")
+      }
+      setPaying(false)
+      return
+    }
+
     try {
       const res = await fetch("/api/payment/create-order", {
         method: "POST",
@@ -147,8 +160,10 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
                   {paying ? (
                     <span className="flex items-center gap-2">
                       <Loader2Icon className="size-4 animate-spin" />
-                      Redirecting to payment…
+                      {plan.cost === 0 ? "Activating…" : "Redirecting to payment…"}
                     </span>
+                  ) : plan.cost === 0 ? (
+                    "Activate Free Plan"
                   ) : (
                     `Pay ₹${fmt(plan.cost)} via AeroPay`
                   )}

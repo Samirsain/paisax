@@ -1,22 +1,13 @@
 "use client"
 
-import Image from "next/image"
 import { useState } from "react"
 import { ArrowRightIcon, InfoIcon } from "lucide-react"
 import { BuySheet } from "@/components/buy-sheet"
-import { Chip, CoinIcon, Skeleton } from "@/components/marks"
+import { Chip, CoinIcon, PlanIcon, Skeleton } from "@/components/marks"
 import { Button } from "@/components/ui/button"
 import { PLANS, active, cantBuy, getPlan, type PlanId } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 import { card, cn } from "@/lib/utils"
-
-/** Promotional banner images — shown as a slim brand strip at the top of each card. */
-const PLAN_BANNERS: Partial<Record<PlanId, string>> = {
-  jio: "/jio.png",
-  airtel: "/airtel.png",
-  tata: "/tata.png",
-  tesla: "/tesala.png",
-}
 
 export default function PlansPage() {
   const { ready: loaded, state } = useStore()
@@ -70,43 +61,30 @@ function PlanCard({ planId, onBuy }: { planId: PlanId; onBuy: () => void }) {
   const why = cantBuy(state, planId)
   const mine = active(state).find((o) => o.planId === planId)
 
-  const banner = PLAN_BANNERS[planId]
-
   return (
-    <article className={cn(card, "overflow-hidden")}>
-      {/* Minimal brand strip — just the logo area, 96px tall */}
-      {banner && (
-        <div className="relative h-24 w-full overflow-hidden">
-          <Image
-            src={banner}
-            alt={`${plan.name} brand`}
-            fill
-            className="object-cover object-top"
-            priority
-          />
-        </div>
-      )}
-
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
+    <article className={cn(card, "p-5")}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <PlanIcon planId={planId} className="size-14 shadow-sm" />
           <div className="min-w-0">
             {mine ? (
-              <Chip tone="mint" dot className="mb-2">
+              <Chip tone="mint" dot className="mb-1">
                 Running · day {mine.claimed} of {plan.days}
               </Chip>
             ) : (
-              <Chip tone={planId === "tesla" ? "amber" : "indigo"} className="mb-2">
+              <Chip tone={planId === "tesla" ? "amber" : "indigo"} className="mb-1">
                 {plan.tag}
               </Chip>
             )}
             <h2 className="text-headline-md text-on-surface">{plan.name} Plan</h2>
-            <p className="text-body-md text-on-variant">{plan.blurb}</p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-stat text-on-surface">₹{fmt(plan.cost)}</p>
-            <p className="text-label-sm text-on-variant">investment</p>
+            <p className="text-body-sm text-on-variant">{plan.blurb}</p>
           </div>
         </div>
+        <div className="shrink-0 text-right">
+          <p className="text-stat text-on-surface">₹{fmt(plan.cost)}</p>
+          <p className="text-label-sm text-on-variant">investment</p>
+        </div>
+      </div>
 
       <dl className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-surface-low p-2">
         {[
@@ -132,7 +110,6 @@ function PlanCard({ planId, onBuy }: { planId: PlanId; onBuy: () => void }) {
             {why === "running" ? "Already running" : `Need ₹${fmt(plan.cost - state.coins)} more`}
           </p>
         )}
-      </div>
       </div>
     </article>
   )

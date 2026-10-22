@@ -13,7 +13,7 @@ export interface Plan {
 }
 
 export const PLANS: Plan[] = [
-  { id: "free", name: "Free", tag: "No cost – activate once", blurb: "Claim ₹10 every day forever. Activate once, earn always.", cost: 0, perDay: 10, days: 3650 },
+  { id: "free", name: "Free", tag: "No cost – activate once", blurb: "Claim ₹10 every day for 30 days. Activate once, earn always.", cost: 0, perDay: 10, days: 30 },
   { id: "jio", name: "Jio", tag: "Best for beginners", blurb: "Start earning daily with India's most trusted network", cost: 599, perDay: 39, days: 30 },
   { id: "airtel", name: "Airtel", tag: "Most popular", blurb: "Supercharge your daily income with premium returns", cost: 999, perDay: 66, days: 30 },
   { id: "tata", name: "Tata", tag: "High returns", blurb: "Unlock powerful daily earnings backed by Tata trust", cost: 1499, perDay: 99, days: 30 },
