@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     // Seed empty game state
     await db`
-      INSERT INTO game_states (user_id, state) VALUES (${user.id}, ${{}}::jsonb)
+      INSERT INTO game_states (user_id, state) VALUES (${user.id}, '{}'::jsonb)
       ON CONFLICT (user_id) DO NOTHING
     `
 
