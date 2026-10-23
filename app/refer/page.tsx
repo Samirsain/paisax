@@ -37,7 +37,7 @@ export default function ReferPage() {
   const levels = [
     {
       level: 1,
-      commission: "40%",
+      commission: "10%",
       members: totalMembers,
       active: totalMembers > 0 ? totalMembers : 0,
       recharge: teamRecharge,
@@ -164,7 +164,7 @@ export default function ReferPage() {
             Grow your team
           </h2>
           <p className="text-[11px] font-medium text-amber-100/90 leading-tight mt-0.5">
-            Earn up to 40% on every plan your team buys.
+            Earn up to 10% on every plan your team buys.
           </p>
         </div>
 

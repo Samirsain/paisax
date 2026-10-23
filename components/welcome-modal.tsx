@@ -77,7 +77,7 @@ export function WelcomeModal({ forceOpen, onClose }: WelcomeModalProps) {
         <div className="mt-5 grid grid-cols-3 gap-2">
           <div className="rounded-2xl bg-amber-50 p-2.5 border border-amber-300 shadow-xs text-center">
             <p className="text-[11px] font-bold text-amber-900">Signup Bonus</p>
-            <p className="mt-0.5 text-xl font-black text-[#b45309]">₹50</p>
+            <p className="mt-0.5 text-xl font-black text-[#b45309]">₹0</p>
           </div>
           <div className="rounded-2xl bg-[#fffbeb] p-2.5 border border-amber-200/60 shadow-xs text-center">
             <p className="text-[11px] font-semibold text-amber-900/80">Min deposit</p>
@@ -97,7 +97,7 @@ export function WelcomeModal({ forceOpen, onClose }: WelcomeModalProps) {
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-white py-2 px-1 shadow-xs border border-amber-100">
               <p className="text-[10px] font-semibold text-slate-500">Level 1</p>
-              <p className="text-lg font-black text-amber-600">40%</p>
+              <p className="text-lg font-black text-amber-600">10%</p>
             </div>
             <div className="rounded-xl bg-white py-2 px-1 shadow-xs border border-amber-100">
               <p className="text-[10px] font-semibold text-slate-500">Level 2</p>

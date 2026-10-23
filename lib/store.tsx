@@ -155,7 +155,7 @@ const actions = {
   collect: (onlyId?: string) => earn((s, t) => game.collect(s, t, onlyId)),
   buy: (planId: PlanId) => commit((s, t) => game.buy(s, planId, t)),
   activatePlan: (planId: PlanId, orderId?: string) => commit((s, t) => game.activatePlan(s, planId, t, orderId)),
-  withdraw: (amount: number, method = "upi") => commit((s, t) => game.withdraw(s, amount, t, method)),
+  withdraw: (amount: number, method = "bank") => commit((s, t) => game.withdraw(s, amount, t, method)),
   invite: () => earn(game.invite),
   rename: (name: string) => commit((s) => ({ ...s, name })),
   skipDay: () => commit((s) => ({ ...s, skew: s.skew + game.DAY_MS })),

@@ -109,7 +109,7 @@ export function canWithdrawToday(): boolean {
 export const getPlan = (id: PlanId) => PLANS.find((p) => p.id === id) || PLANS[0]
 const isPlanId = (id: unknown): id is PlanId => PLANS.some((p) => p.id === id)
 
-export const WELCOME_GIFT = 50
+export const WELCOME_GIFT = 0
 export const INVITE_BONUS = 100
 /** Extra bonus to referrer when referred user buys their first plan. */
 export const REFER_PLAN_BONUS = 50
@@ -337,7 +337,7 @@ export function buy(s: State, planId: PlanId, now: number): State {
 }
 
 /** Processes a wallet withdrawal, deducting coins and recording the transaction */
-export function withdraw(s: State, amount: number, now: number, method = "upi"): State {
+export function withdraw(s: State, amount: number, now: number, method = "bank"): State {
   if (amount < WITHDRAW_MIN) throw new Error(`Minimum withdrawal is ₹${WITHDRAW_MIN}`)
   if (s.coins < amount) throw new Error("Withdrawal amount exceeds your available balance")
   if (!hasBoughtPaidPlan(s)) throw new Error("Pehle koi paid solar plan active karein")

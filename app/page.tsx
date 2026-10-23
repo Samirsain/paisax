@@ -41,8 +41,8 @@ const WITHDRAWAL_TESTIMONIALS = [
     amount: 18450,
     plan: "Solar Mega Station 2000",
     time: "Today at 11:34 AM",
-    utr: "UPI/428190381029",
-    comment: "Bhai sach me PaisaX Solar sabse best hai! Pehle lagta tha fake hoga, par kal ₹18,450 ka withdrawal lagaya aur 3 minute me direct Paytm bank me credit ho gaya. Daily withdrawal option is unbeatable!",
+    utr: "IMPS/428190381029",
+    comment: "Bhai sach me PaisaX Solar sabse best hai! Pehle lagta tha fake hoga, par kal ₹18,450 ka withdrawal lagaya aur 3 minute me direct bank account me credit ho gaya. Daily withdrawal option is unbeatable!",
   },
   {
     name: "Priya Patel",

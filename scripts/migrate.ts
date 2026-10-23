@@ -28,15 +28,42 @@ async function migrate() {
   console.log("✓ game_states table")
 
   await db`
-    CREATE TABLE IF NOT EXISTS referrals (
-      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      referrer_id UUID NOT NULL REFERENCES users(id),
-      referred_id UUID NOT NULL REFERENCES users(id),
-      bonus_paid  BOOLEAN NOT NULL DEFAULT false,
-      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    CREATE TABLE IF NOT EXISTS orders (
+      id                  TEXT PRIMARY KEY,
+      user_id             UUID NOT NULL REFERENCES users(id),
+      plan_id             TEXT NOT NULL,
+      amount              INT NOT NULL,
+      status              TEXT NOT NULL DEFAULT 'PENDING',
+      txn_id              TEXT,
+      pay_url             TEXT,
+      webhook_payload     JSONB,
+      webhook_received_at TIMESTAMPTZ,
+      credited_to_wallet  BOOLEAN DEFAULT false,
+      created_at          TIMESTAMPTZ DEFAULT now(),
+      updated_at          TIMESTAMPTZ DEFAULT now()
     )
   `
-  console.log("✓ referrals table")
+  console.log("✓ orders table")
+
+  await db`
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id             TEXT PRIMARY KEY,
+      user_id        UUID NOT NULL REFERENCES users(id),
+      account_name   TEXT NOT NULL,
+      account_number TEXT NOT NULL,
+      bank_name      TEXT,
+      ifsc_code      TEXT NOT NULL,
+      amount         INT NOT NULL,
+      fee            INT NOT NULL,
+      net_amount     INT NOT NULL,
+      status         TEXT NOT NULL DEFAULT 'PENDING',
+      utr            TEXT,
+      admin_note     TEXT,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `
+  console.log("✓ withdrawals table")
 
   console.log("✅ Migration complete!")
   await db.end()

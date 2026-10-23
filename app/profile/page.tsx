@@ -87,13 +87,13 @@ export default function ProfilePage() {
     },
     {
       title: "Withdraw Funds",
-      subtitle: "Instant bank / UPI payouts (Min ₹180)",
+      subtitle: "Instant Bank transfer payouts (Min ₹180)",
       icon: GiftIcon,
       href: "/wallet/withdraw",
     },
     {
       title: "My Team & Invites",
-      subtitle: "Up to 40% 3-level commissions",
+      subtitle: "Up to 10% 3-level commissions",
       icon: UsersIcon,
       href: "/refer",
       badge: state.invites > 0 ? `${state.invites} Members` : undefined,

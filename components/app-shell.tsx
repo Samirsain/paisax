@@ -29,13 +29,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, ready } = useAuth()
   const title = SUB_PAGES[path]
   const isPublic = PUBLIC_PATHS.has(path)
+  const isAdmin = path.startsWith("/admin")
 
   // Auth guard: redirect to login if not logged in (after hydration)
   useEffect(() => {
-    if (ready && !user && !isPublic) {
+    if (ready && !user && !isPublic && !isAdmin) {
       router.replace("/login")
     }
-  }, [ready, user, isPublic, router])
+  }, [ready, user, isPublic, isAdmin, router])
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return
@@ -46,8 +47,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // On public pages render bare (no shell chrome)
-  if (isPublic) return <>{children}</>
+  // On public or admin pages render bare (no shell chrome)
+  if (isPublic || isAdmin) return <>{children}</>
 
   // While auth is loading, show nothing (avoids flash)
   if (!ready || !user) return null

@@ -13,9 +13,7 @@ import {
   HelpCircleIcon,
   InfoIcon,
   LockIcon,
-  QrCodeIcon,
   ShieldCheckIcon,
-  SmartphoneIcon,
   WalletIcon,
   XCircleIcon,
 } from "lucide-react"
@@ -25,38 +23,42 @@ import { Button } from "@/components/ui/button"
 import { canWithdrawToday, hasBoughtPaidPlan, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
-import { UpiIcon, BankIcon, PaytmIcon } from "@/components/payment-icons"
-
-const METHODS = [
-  { id: "upi", label: "UPI", icon: UpiIcon, placeholder: "e.g. yourname@okhdfcbank" },
-  { id: "bank", label: "Bank Transfer", icon: BankIcon, placeholder: "Account Number" },
-  { id: "paytm", label: "Paytm Wallet", icon: PaytmIcon, placeholder: "10-digit Paytm mobile number" },
-]
+import { BankIcon } from "@/components/payment-icons"
 
 const INDIAN_PAYOUTS_POOL = [
-  { name: "Rajesh Sharma", amount: 18450, time: "Just now", method: "Instant UPI", avatar: "/avatar/1.png" },
+  { name: "Rajesh Sharma", amount: 18450, time: "Just now", method: "Bank IMPS", avatar: "/avatar/1.png" },
   { name: "Priya Patel", amount: 8900, time: "1 min ago", method: "Bank IMPS", avatar: "/avatar/2.png" },
-  { name: "Vikram Chauhan", amount: 24600, time: "2 min ago", method: "Instant UPI", avatar: "/avatar/3.png" },
-  { name: "Ananya Iyer", amount: 12000, time: "3 min ago", method: "Bank IMPS", avatar: "/avatar/4.png" },
-  { name: "Amit Verma", amount: 36800, time: "4 min ago", method: "Instant UPI", avatar: "/avatar/1.png" },
-  { name: "Deepak Yadav", amount: 6500, time: "6 min ago", method: "Instant UPI", avatar: "/avatar/2.png" },
+  { name: "Vikram Chauhan", amount: 24600, time: "2 min ago", method: "Bank IMPS", avatar: "/avatar/3.png" },
+  { name: "Ananya Iyer", amount: 12000, time: "3 min ago", method: "Bank NEFT", avatar: "/avatar/4.png" },
+  { name: "Amit Verma", amount: 36800, time: "4 min ago", method: "Bank IMPS", avatar: "/avatar/1.png" },
+  { name: "Deepak Yadav", amount: 6500, time: "6 min ago", method: "Bank IMPS", avatar: "/avatar/2.png" },
   { name: "Sunita Deshmukh", amount: 15200, time: "7 min ago", method: "Bank IMPS", avatar: "/avatar/3.png" },
-  { name: "Manoj Tiwari", amount: 48000, time: "9 min ago", method: "Bank IMPS", avatar: "/avatar/4.png" },
-  { name: "Pooja Choudhary", amount: 9800, time: "11 min ago", method: "Instant UPI", avatar: "/avatar/1.png" },
+  { name: "Manoj Tiwari", amount: 48000, time: "9 min ago", method: "Bank NEFT", avatar: "/avatar/4.png" },
+  { name: "Pooja Choudhary", amount: 9800, time: "11 min ago", method: "Bank IMPS", avatar: "/avatar/1.png" },
   { name: "Suresh Reddy", amount: 28500, time: "13 min ago", method: "Bank IMPS", avatar: "/avatar/2.png" },
-  { name: "Neha Gupta", amount: 11400, time: "15 min ago", method: "Instant UPI", avatar: "/avatar/3.png" },
+  { name: "Neha Gupta", amount: 11400, time: "15 min ago", method: "Bank IMPS", avatar: "/avatar/3.png" },
   { name: "Rohit Singhania", amount: 52000, time: "18 min ago", method: "Bank IMPS", avatar: "/avatar/4.png" },
 ]
 
 export default function WithdrawPage() {
   const { ready: loaded, state, withdraw } = useStore()
   const [amount, setAmount] = useState("")
-  const [method, setMethod] = useState("upi")
   const [accountName, setAccountName] = useState("")
-  const [address, setAddress] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [confirmAccountNumber, setConfirmAccountNumber] = useState("")
+  const [bankName, setBankName] = useState("")
   const [ifsc, setIfsc] = useState("")
   const [step, setStep] = useState<"form" | "success">("form")
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [withdrawalInfo, setWithdrawalInfo] = useState<{
+    id: string
+    amount: number
+    fee: number
+    netPayout: number
+    accountNumber: string
+    ifsc: string
+  } | null>(null)
   const [payouts, setPayouts] = useState(INDIAN_PAYOUTS_POOL.slice(0, 5))
   const [pulseIdx, setPulseIdx] = useState<number | null>(null)
 
@@ -93,10 +95,13 @@ export default function WithdrawPage() {
     hasPaidPlan &&
     amt >= WITHDRAW_MIN &&
     amt <= available &&
-    Boolean(address.trim()) &&
-    (method !== "bank" || (Boolean(ifsc.trim()) && Boolean(accountName.trim())))
+    Boolean(accountName.trim()) &&
+    Boolean(accountNumber.trim()) &&
+    accountNumber.trim() === confirmAccountNumber.trim() &&
+    Boolean(ifsc.trim()) &&
+    !loading
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!hasPaidPlan) {
       setError("Withdrawal locked! Pehle koi bhi paid solar plan khareedein tabhi payout unlock hoga.")
@@ -115,24 +120,69 @@ export default function WithdrawPage() {
       setError(`Withdrawal amount exceeds your available balance (₹${fmt(available)})`)
       return
     }
-    if (!address.trim()) {
-      setError("Please provide your account or UPI details")
+    if (!accountName.trim()) {
+      setError("Please enter Account Holder Name")
       return
     }
-    if (method === "bank" && (!ifsc.trim() || !accountName.trim())) {
-      setError("Please fill in Account Holder Name and IFSC Code")
+    if (!accountNumber.trim() || accountNumber.trim().length < 6) {
+      setError("Please enter a valid Bank Account Number")
+      return
+    }
+    if (accountNumber.trim() !== confirmAccountNumber.trim()) {
+      setError("Account numbers do not match! Please check carefully.")
+      return
+    }
+    if (!ifsc.trim() || ifsc.trim().length < 4) {
+      setError("Please enter a valid Bank IFSC Code")
       return
     }
 
+    setLoading(true)
+    setError("")
+
     try {
-      withdraw(amt, method)
-      setError("")
+      const res = await fetch("/api/wallet/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amt,
+          accountName: accountName.trim(),
+          accountNumber: accountNumber.trim(),
+          bankName: bankName.trim(),
+          ifsc: ifsc.trim().toUpperCase(),
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Withdrawal request failed")
+      }
+
+      // Deduct locally in store
+      try {
+        withdraw(amt, "bank")
+      } catch {
+        // Ignored if local state syncs with server later
+      }
+
+      setWithdrawalInfo({
+        id: data.withdrawal?.id || `W_${Date.now()}`,
+        amount: amt,
+        fee,
+        netPayout,
+        accountNumber: accountNumber.trim(),
+        ifsc: ifsc.trim().toUpperCase(),
+      })
+
       setStep("success")
-      toast.success("Withdrawal request submitted successfully!")
+      toast.success("Bank withdrawal request submitted successfully!")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Withdrawal failed"
       setError(msg)
       toast.error(msg)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -146,7 +196,7 @@ export default function WithdrawPage() {
         <div className="absolute -bottom-8 -left-8 size-36 rounded-full bg-amber-950/30 blur-xl pointer-events-none" />
 
         <h1 className="text-xl font-black tracking-tight text-white drop-shadow-xs">
-          Withdraw Funds
+          Bank Withdrawal
         </h1>
 
         <div className="mt-3">
@@ -158,7 +208,7 @@ export default function WithdrawPage() {
 
         <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-bold text-amber-100">
           <ShieldCheckIcon className="size-3.5 text-yellow-300" />
-          <span>Min ₹{WITHDRAW_MIN} · 3% Tax Fee · Mon–Fri Payouts</span>
+          <span>Direct Bank Payouts · Min ₹{WITHDRAW_MIN} · 3% Tax Fee</span>
         </div>
       </div>
 
@@ -183,28 +233,42 @@ export default function WithdrawPage() {
           </div>
 
           <h2 className="mt-4 text-xl font-black text-slate-900">
-            Withdrawal Request Sent!
+            Bank Transfer Initiated!
           </h2>
-          <p className="mt-1.5 max-w-[260px] text-xs font-medium text-slate-500 leading-relaxed">
-            Your payout of <strong className="text-emerald-700">₹{fmt(netPayout)}</strong> is being processed and will be credited to your account shortly.
+          <p className="mt-1.5 max-w-[280px] text-xs font-medium text-slate-500 leading-relaxed">
+            Your payout of <strong className="text-emerald-700">₹{fmt(withdrawalInfo?.netPayout || netPayout)}</strong> has been recorded and will be directly credited to your bank account.
           </p>
 
           <div className="mt-5 w-full rounded-2xl bg-amber-50/50 p-4 border border-amber-200 text-left text-xs divide-y divide-amber-100">
             <div className="flex justify-between py-1.5">
+              <span className="text-slate-500">Request ID</span>
+              <span className="font-mono font-bold text-slate-700 text-[11px]">{withdrawalInfo?.id}</span>
+            </div>
+            <div className="flex justify-between py-1.5">
               <span className="text-slate-500">Requested Amount</span>
-              <span className="font-bold text-slate-900">₹{fmt(amt)}</span>
+              <span className="font-bold text-slate-900">₹{fmt(withdrawalInfo?.amount || amt)}</span>
             </div>
             <div className="flex justify-between py-1.5">
               <span className="text-slate-500">Service Fee ({WITHDRAW_FEE_PCT}%)</span>
-              <span className="font-bold text-slate-700">-₹{fmt(fee)}</span>
+              <span className="font-bold text-slate-700">-₹{fmt(withdrawalInfo?.fee || fee)}</span>
             </div>
             <div className="flex justify-between py-1.5">
-              <span className="font-bold text-slate-900">Final Credit</span>
-              <span className="font-black text-emerald-600 text-sm">₹{fmt(netPayout)}</span>
+              <span className="font-bold text-slate-900">Net Credit to Bank</span>
+              <span className="font-black text-emerald-600 text-sm">₹{fmt(withdrawalInfo?.netPayout || netPayout)}</span>
+            </div>
+            <div className="flex justify-between py-1.5">
+              <span className="text-slate-500">Account Number</span>
+              <span className="font-mono font-bold text-slate-800">
+                •••• {withdrawalInfo?.accountNumber?.slice(-4) || "••••"}
+              </span>
+            </div>
+            <div className="flex justify-between py-1.5">
+              <span className="text-slate-500">IFSC Code</span>
+              <span className="font-mono font-bold text-slate-800">{withdrawalInfo?.ifsc}</span>
             </div>
             <div className="flex justify-between py-1.5">
               <span className="text-slate-500">Channel</span>
-              <span className="font-bold text-slate-800 uppercase">{method}</span>
+              <span className="font-bold text-amber-800">Bank Transfer (IMPS/NEFT)</span>
             </div>
           </div>
 
@@ -213,7 +277,8 @@ export default function WithdrawPage() {
             onClick={() => {
               setStep("form")
               setAmount("")
-              setAddress("")
+              setAccountNumber("")
+              setConfirmAccountNumber("")
             }}
             className="mt-6 w-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 py-3.5 text-sm font-extrabold text-white shadow-md active:scale-95 cursor-pointer"
           >
@@ -234,7 +299,7 @@ export default function WithdrawPage() {
           </p>
           <div className="mt-4 rounded-2xl bg-amber-50/80 p-3.5 text-xs font-bold text-amber-950 border border-amber-200 text-left flex items-start gap-2.5">
             <ShieldCheckIcon className="size-4.5 text-amber-600 shrink-0 mt-0.5" />
-            <span>Paid plan activate hote hi aapka direct UPI / Bank withdrawal turant unlock ho jayega!</span>
+            <span>Paid plan activate hote hi aapka direct Bank Account withdrawal turant unlock ho jayega!</span>
           </div>
           <Link
             href="/plans"
@@ -314,71 +379,104 @@ export default function WithdrawPage() {
             </p>
           )}
 
-          {/* Channel Selector */}
-          <p className="mt-4 text-xs font-black text-slate-900">
-            Withdrawal Method
-          </p>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {METHODS.map((m) => {
-              const Icon = m.icon
-              const selected = method === m.id
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    setMethod(m.id)
-                    setError("")
-                  }}
-                  className={cn(
-                    "flex flex-col items-center justify-center rounded-2xl p-2.5 border text-xs font-bold transition-all cursor-pointer h-20",
-                    selected
-                      ? "bg-amber-50 border-amber-500 text-amber-800 shadow-xs"
-                      : "bg-slate-50/60 border-slate-200 text-slate-600 hover:bg-slate-50"
-                  )}
-                >
-                  <Icon className={cn("h-6 w-auto max-w-[46px] mb-1.5", selected ? "opacity-100" : "opacity-60")} />
-                  <span className="truncate">{m.label}</span>
-                </button>
-              )
-            })}
+          {/* Channel Header - Bank Only */}
+          <div className="mt-4 flex items-center justify-between">
+            <p className="text-xs font-black text-slate-900">
+              Payout Channel
+            </p>
+            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+              Bank Transfer Only
+            </span>
+          </div>
+
+          {/* Dedicated Bank Channel Card */}
+          <div className="mt-2 rounded-2xl bg-amber-50/60 border border-amber-300/80 p-3 flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-300 text-amber-700 shrink-0">
+              <Building2Icon className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black text-slate-900">Direct Bank Account Transfer</p>
+              <p className="text-[10px] font-medium text-slate-500">IMPS / NEFT 24×7 Instant Payout to Any Indian Bank</p>
+            </div>
           </div>
 
           {/* Account Details Input */}
           <div className="mt-3.5 flex flex-col gap-2.5">
-            {method === "bank" ? (
-              <>
-                <input
-                  type="text"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="Account Holder Full Name"
-                  className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
-                />
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Bank Account Number"
-                  className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono"
-                />
-                <input
-                  type="text"
-                  value={ifsc}
-                  onChange={(e) => setIfsc(e.target.value.toUpperCase())}
-                  placeholder="Bank IFSC Code (e.g. SBIN0001234)"
-                  className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono uppercase"
-                />
-              </>
-            ) : (
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                Account Holder Full Name
+              </label>
               <input
                 type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder={METHODS.find((m) => m.id === method)?.placeholder}
-                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                placeholder="e.g. Ramesh Kumar Sharma"
+                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-amber-500"
               />
-            )}
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                Bank Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="e.g. State Bank of India / HDFC Bank"
+                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                Bank Account Number
+              </label>
+              <input
+                type="text"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
+                placeholder="Enter complete bank account number"
+                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                Confirm Bank Account Number
+              </label>
+              <input
+                type="text"
+                value={confirmAccountNumber}
+                onChange={(e) => setConfirmAccountNumber(e.target.value.replace(/\D/g, ""))}
+                placeholder="Re-enter bank account number to confirm"
+                className={cn(
+                  "w-full rounded-2xl bg-slate-50 border px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono focus:border-amber-500",
+                  confirmAccountNumber && confirmAccountNumber !== accountNumber
+                    ? "border-red-400 bg-red-50/20"
+                    : "border-slate-200"
+                )}
+              />
+              {confirmAccountNumber && confirmAccountNumber !== accountNumber && (
+                <p className="mt-1 text-[10px] font-bold text-red-500">
+                  Account numbers do not match
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                Bank IFSC Code
+              </label>
+              <input
+                type="text"
+                value={ifsc}
+                onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+                placeholder="11-digit IFSC code (e.g. SBIN0001234)"
+                maxLength={11}
+                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono uppercase focus:border-amber-500"
+              />
+            </div>
           </div>
 
           {/* Calculation summary */}
@@ -393,7 +491,7 @@ export default function WithdrawPage() {
                 <span className="font-semibold text-slate-700">-₹{fmt(fee)}</span>
               </div>
               <div className="flex justify-between pt-1 mt-1 border-t border-amber-200 text-slate-900 font-bold">
-                <span>Actual Credit to Account:</span>
+                <span>Actual Credit to Bank:</span>
                 <span className="text-emerald-600 text-sm font-black">₹{fmt(netPayout)}</span>
               </div>
             </div>
@@ -408,15 +506,17 @@ export default function WithdrawPage() {
             type="submit"
             variant="buy"
             size="xl"
-            disabled={!isFormValid}
+            disabled={!isFormValid || loading}
             className={cn(
               "mt-4 w-full rounded-full py-3.5 font-black transition-all",
-              !isFormValid
+              !isFormValid || loading
                 ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border-none"
                 : "bg-gradient-to-r from-[#eab308] via-[#f59e0b] to-[#d97706] text-slate-950 shadow-lg shadow-amber-500/25 active:scale-95 cursor-pointer"
             )}
           >
-            {!hasPaidPlan
+            {loading
+              ? "Processing Bank Request..."
+              : !hasPaidPlan
               ? "Paid Plan Required"
               : !today
               ? "Withdrawals Closed on Weekends"
@@ -426,9 +526,15 @@ export default function WithdrawPage() {
               ? `Enter Min. ₹${WITHDRAW_MIN}`
               : amt > available
               ? "Amount Exceeds Balance"
-              : !address.trim()
-              ? "Enter Account / UPI Details"
-              : `Confirm Withdrawal (₹${fmt(amt)})`}
+              : !accountName.trim()
+              ? "Enter Account Holder Name"
+              : !accountNumber.trim()
+              ? "Enter Bank Account Number"
+              : accountNumber !== confirmAccountNumber
+              ? "Account Numbers Don't Match"
+              : !ifsc.trim()
+              ? "Enter Bank IFSC Code"
+              : `Confirm Bank Transfer (₹${fmt(amt)})`}
           </Button>
         </form>
       )}
@@ -446,7 +552,7 @@ export default function WithdrawPage() {
             </h2>
           </div>
           <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-            Realtime 24×7
+            Direct Bank 24×7
           </span>
         </div>
 
