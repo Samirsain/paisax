@@ -24,9 +24,22 @@ import {
   ArrowUpRightIcon,
   DollarSignIcon,
   AlertTriangleIcon,
+  Share2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+
+interface OwnedPlanDetail {
+  id?: string
+  planId: string
+  planName: string
+  cost: number
+  perDay: number
+  days: number
+  totalReturn: number
+  claimed: number
+  boughtAt?: number
+}
 
 interface UserItem {
   id: string
@@ -34,19 +47,23 @@ interface UserItem {
   phone: string
   inviteCode: string
   invitedBy: string | null
+  inviterName?: string | null
+  inviterPhone?: string | null
+  directInvitesCount?: number
+  totalCommissionEarned?: number
   createdAt: string
   coins: number
   lifetime: number
   hasPaidPlan: boolean
   paidPlansCount: number
-  ownedPlans: {
-    planId: string
-    planName: string
-    perDay: number
-    claimed: number
-    boughtAt: number
-  }[]
+  totalDepositsAmount?: number
+  successfulOrdersCount?: number
+  ownedPlans: OwnedPlanDetail[]
   totalOrdersCount: number
+  bankAccountName?: string | null
+  bankAccountNumber?: string | null
+  bankName?: string | null
+  bankIfsc?: string | null
 }
 
 interface PaidUserItem {
@@ -54,13 +71,27 @@ interface PaidUserItem {
   name: string
   phone: string
   inviteCode: string
+  invitedBy?: string | null
+  inviterName?: string | null
+  inviterPhone?: string | null
+  directInvitesCount?: number
+  totalCommissionEarned?: number
   createdAt: string
   coins: number
-  ownedPlans: {
+  totalDeposits: number
+  depositCount: number
+  bankAccountName?: string | null
+  bankAccountNumber?: string | null
+  bankName?: string | null
+  bankIfsc?: string | null
+  ownedPlans: OwnedPlanDetail[]
+  successfulOrders?: {
+    id: string
     planId: string
     planName: string
-    perDay: number
-    claimed: number
+    amount: number
+    txnId: string | null
+    createdAt: string
   }[]
 }
 
@@ -96,22 +127,43 @@ interface WithdrawalItem {
   updatedAt: string
 }
 
+interface CommissionItem {
+  id: string
+  orderId: string
+  payerId: string
+  payerName: string
+  payerPhone: string
+  recipientId: string
+  recipientName: string
+  recipientPhone: string
+  level: number
+  percent: number
+  orderAmount: number
+  commissionAmount: number
+  status: string
+  createdAt: string
+}
+
 interface AdminData {
   stats: {
     totalUsers: number
     paidUsersCount: number
     totalDeposits: number
+    totalDepositsCount: number
     totalOrdersCount: number
     pendingWithdrawalsCount: number
     pendingWithdrawalsAmount: number
     approvedWithdrawalsCount: number
     approvedWithdrawalsAmount: number
     totalWithdrawalsCount: number
+    totalCommissionsPaid?: number
+    totalCommissionsCount?: number
   }
   users: UserItem[]
   paidUsers: PaidUserItem[]
   orders: OrderItem[]
   withdrawals: WithdrawalItem[]
+  commissions?: CommissionItem[]
 }
 
 export default function AdminPage() {
@@ -122,9 +174,12 @@ export default function AdminPage() {
 
   const [data, setData] = useState<AdminData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders">("users")
+  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders" | "commissions">("users")
   const [search, setSearch] = useState("")
   const [withdrawalFilter, setWithdrawalFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL")
+  const [orderFilter, setOrderFilter] = useState<"ALL" | "SUCCESS" | "PENDING" | "FAILED">("ALL")
+  const [commissionFilter, setCommissionFilter] = useState<"ALL" | "1" | "2" | "3">("ALL")
+  const [orderCheckingId, setOrderCheckingId] = useState<string | null>(null)
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
@@ -303,6 +358,92 @@ export default function AdminPage() {
     )
   }, [data?.withdrawals, withdrawalFilter, search])
 
+  // Filtered orders
+  const filteredOrders = useMemo(() => {
+    if (!data?.orders) return []
+    let list = data.orders
+    if (orderFilter !== "ALL") {
+      list = list.filter((o) => o.status === orderFilter)
+    }
+    const q = search.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(
+      (o) =>
+        o.id.toLowerCase().includes(q) ||
+        o.userPhone.includes(q) ||
+        o.userName.toLowerCase().includes(q) ||
+        o.planName.toLowerCase().includes(q) ||
+        (o.txnId && o.txnId.toLowerCase().includes(q))
+    )
+  }, [data?.orders, orderFilter, search])
+
+  // Filtered referral commissions
+  const filteredCommissions = useMemo(() => {
+    if (!data?.commissions) return []
+    let list = data.commissions
+    if (commissionFilter !== "ALL") {
+      const lvl = parseInt(commissionFilter, 10)
+      list = list.filter((c) => c.level === lvl)
+    }
+    const q = search.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(
+      (c) =>
+        c.recipientName?.toLowerCase().includes(q) ||
+        c.recipientPhone?.includes(q) ||
+        c.payerName?.toLowerCase().includes(q) ||
+        c.payerPhone?.includes(q) ||
+        c.orderId?.toLowerCase().includes(q)
+    )
+  }, [data?.commissions, commissionFilter, search])
+
+  async function handleCheckGateway(orderId: string) {
+    setOrderCheckingId(orderId)
+    try {
+      const res = await fetch("/api/admin/orders/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, action: "CHECK_GATEWAY" }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success(json.message)
+        loadData()
+      } else {
+        toast.error(json.error || json.message || "Gateway check failed")
+      }
+    } catch {
+      toast.error("Network error while checking gateway")
+    } finally {
+      setOrderCheckingId(null)
+    }
+  }
+
+  async function handleManualApproveOrder(orderId: string) {
+    if (!confirm("Are you sure you want to manually mark this order as SUCCESS and activate the plan for this user?")) {
+      return
+    }
+    setOrderCheckingId(orderId)
+    try {
+      const res = await fetch("/api/admin/orders/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, action: "MANUAL_APPROVE" }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        toast.success("Order approved and plan activated!")
+        loadData()
+      } else {
+        toast.error(json.error || "Failed to approve order")
+      }
+    } catch {
+      toast.error("Network error")
+    } finally {
+      setOrderCheckingId(null)
+    }
+  }
+
   // If still checking auth
   if (authenticated === null) {
     return (
@@ -434,8 +575,8 @@ export default function AdminPage() {
 
       <main className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
         
-        {/* ── 4 KPI STATS CARDS ──────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        {/* ── 5 KPI STATS CARDS ──────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
           
           {/* Total Users */}
           <div className="rounded-2xl bg-gradient-to-b from-slate-900 to-[#0e1726] p-4 border border-slate-800 shadow-lg">
@@ -485,8 +626,24 @@ export default function AdminPage() {
             </p>
           </div>
 
-          {/* Pending Withdrawals */}
+          {/* Referral Commissions Paid */}
           <div className="rounded-2xl bg-gradient-to-b from-slate-900 to-[#0e1726] p-4 border border-slate-800 shadow-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-amber-300">Referral Paid</span>
+              <div className="flex size-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
+                <Share2Icon className="size-4" />
+              </div>
+            </div>
+            <p className="mt-2 text-2xl font-black text-amber-300 sm:text-3xl">
+              ₹{Number(data?.stats?.totalCommissionsPaid ?? 0).toLocaleString("en-IN")}
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-slate-400">
+              {data?.stats?.totalCommissionsCount ?? 0} paid across 3 tiers
+            </p>
+          </div>
+
+          {/* Pending Withdrawals */}
+          <div className="rounded-2xl bg-gradient-to-b from-slate-900 to-[#0e1726] p-4 border border-slate-800 shadow-lg col-span-2 sm:col-span-1">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-rose-400">Pending Withdrawals</span>
               <div className="flex size-7 items-center justify-center rounded-lg bg-rose-500/15 text-rose-400">
@@ -537,6 +694,48 @@ export default function AdminPage() {
             >
               <ZapIcon className="size-3.5" />
               <span>Paid Plan Users ({data?.paidUsers?.length ?? 0})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("orders")}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                activeTab === "orders"
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                  : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800"
+              )}
+            >
+              <BanknoteIcon className="size-3.5" />
+              <span>
+                Deposits / Orders ({data?.orders?.length ?? 0})
+                {(data?.orders?.filter((o) => o.status === "SUCCESS").length ?? 0) > 0 && (
+                  <span className="ml-1 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[10px] text-emerald-300 font-extrabold">
+                    {data?.orders?.filter((o) => o.status === "SUCCESS").length} Paid
+                  </span>
+                )}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("commissions")}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                activeTab === "commissions"
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                  : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800"
+              )}
+            >
+              <Share2Icon className="size-3.5" />
+              <span>
+                3-Level Commissions ({data?.commissions?.length ?? 0})
+                {(data?.stats?.totalCommissionsPaid ?? 0) > 0 && (
+                  <span className="ml-1 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[10px] text-emerald-300 font-extrabold">
+                    ₹{Number(data?.stats?.totalCommissionsPaid ?? 0).toLocaleString("en-IN")}
+                  </span>
+                )}
+              </span>
             </button>
 
             <button
@@ -645,10 +844,24 @@ export default function AdminPage() {
                           </td>
                           <td className="py-3 px-4 font-bold text-white">{u.name}</td>
                           <td className="py-3 px-4 font-mono text-slate-300">
-                            {u.inviteCode}
-                            {u.invitedBy && (
-                              <span className="text-[10px] text-slate-500 block">
-                                via: {u.invitedBy}
+                            <span className="font-bold text-amber-200">{u.inviteCode}</span>
+                            {u.invitedBy ? (
+                              <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">
+                                via: <strong className="text-slate-300">{u.inviterName || "Partner"}</strong> {u.inviterPhone ? `(${u.inviterPhone.slice(-4)})` : ""}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-600 block mt-0.5 font-sans">
+                                Direct Registration
+                              </span>
+                            )}
+                            {(u.directInvitesCount ?? 0) > 0 && (
+                              <span className="text-[10px] font-bold text-emerald-400 block mt-0.5 font-sans">
+                                Team: {u.directInvitesCount} invited
+                              </span>
+                            )}
+                            {(u.totalCommissionEarned ?? 0) > 0 && (
+                              <span className="text-[10px] font-black text-amber-300 block font-sans">
+                                Earned: ₹{Number(u.totalCommissionEarned).toLocaleString("en-IN")}
                               </span>
                             )}
                           </td>
@@ -736,36 +949,96 @@ export default function AdminPage() {
                             </button>
                           </div>
                         </div>
-                        <span className="rounded-full bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[10px] font-extrabold text-amber-400">
-                          Active Investor
+
+                        <span className={cn(
+                          "rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider border",
+                          (u.depositCount ?? 1) > 1
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                            : "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                        )}>
+                          {(u.depositCount ?? 1) > 1 ? `${u.depositCount} Deposits` : "Active Investor"}
                         </span>
                       </div>
 
-                      <div className="mt-3.5 space-y-1.5">
+                      {/* User Investment Summary */}
+                      <div className="mt-3 rounded-xl bg-slate-900/90 border border-slate-800 p-2.5 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-slate-400 text-[10px] block">Total Deposited</span>
+                          <span className="font-mono font-black text-emerald-400 text-sm">
+                            ₹{(u.totalDeposits || 0).toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-slate-400 text-[10px] block">Active Plans</span>
+                          <span className="font-bold text-amber-300">
+                            {u.ownedPlans?.length || 0} {u.ownedPlans?.length === 1 ? "Plan" : "Plans"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2">
                         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          Active Paid Plans ({u.ownedPlans?.length || 0}):
+                          Purchased Solar Plans:
                         </p>
                         {u.ownedPlans?.length > 0 ? (
                           u.ownedPlans.map((p, idx) => (
                             <div
                               key={idx}
-                              className="rounded-xl bg-slate-900/90 border border-slate-800 p-2.5 flex items-center justify-between text-xs"
+                              className="rounded-xl bg-slate-900/95 border border-slate-800/80 p-3 space-y-1.5 text-xs shadow-xs"
                             >
-                              <div>
-                                <p className="font-bold text-slate-200">{p.planName}</p>
-                                <p className="text-[10px] text-emerald-400 font-semibold">
-                                  Daily Return: ₹{p.perDay} / day
-                                </p>
+                              <div className="flex items-start justify-between gap-1">
+                                <div>
+                                  <p className="font-bold text-white text-xs">{p.planName}</p>
+                                  <p className="text-[10px] text-slate-400">
+                                    {p.days || 60} Days Plan • Return: ₹{(p.totalReturn || (p.perDay * (p.days || 60))).toLocaleString("en-IN")}
+                                  </p>
+                                </div>
+                                <span className="rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-xs font-black text-emerald-300 font-mono shrink-0">
+                                  ₹{(p.cost || 0).toLocaleString("en-IN")}
+                                </span>
                               </div>
-                              <span className="text-[10px] font-mono text-slate-400">
-                                Day {p.claimed}
-                              </span>
+
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 text-[11px]">
+                                <span className="text-emerald-400 font-bold">
+                                  Daily: ₹{p.perDay} / day
+                                </span>
+                                <span className="font-mono text-slate-400 text-[10px]">
+                                  Day {p.claimed} / {p.days || 60}
+                                </span>
+                              </div>
+
+                              {p.boughtAt && (
+                                <p className="text-[10px] text-slate-500 font-mono">
+                                  Purchased: {new Date(p.boughtAt).toLocaleString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  })}
+                                </p>
+                              )}
                             </div>
                           ))
                         ) : (
                           <p className="text-xs text-slate-500 italic">Plan activated via gateway order</p>
                         )}
                       </div>
+
+                      {/* Saved Bank Details if available */}
+                      {u.bankAccountNumber && (
+                        <div className="mt-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 p-2 text-xs flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Building2Icon className="size-3.5 text-emerald-400 shrink-0" />
+                            <span className="text-[11px] text-slate-300 font-mono truncate">
+                              {u.bankName ? `${u.bankName} · ` : ""}•••• {u.bankAccountNumber.slice(-4)} ({u.bankIfsc})
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-emerald-400 font-extrabold uppercase shrink-0 ml-1">
+                            Saved Bank
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
@@ -1013,6 +1286,405 @@ export default function AdminPage() {
                   )
                 })
               )}
+            </div>
+
+          </div>
+        )}
+
+        {/* ── TAB 4: DEPOSITS & RECHARGE ORDERS ─────────────────────────────── */}
+        {activeTab === "orders" && (
+          <div className="mt-4">
+            
+            {/* Header and filters */}
+            <div className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-black text-white">
+                  Plan Deposits & Recharge Orders ({filteredOrders.length})
+                </h2>
+                <p className="text-[11px] text-slate-400">
+                  Track all gateway orders, verify live AeroPay payment status, and manually activate plans
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {(["ALL", "SUCCESS", "PENDING", "FAILED"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setOrderFilter(filter)}
+                    className={cn(
+                      "rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all cursor-pointer",
+                      orderFilter === filter
+                        ? "bg-amber-500 text-slate-950 font-black shadow-xs"
+                        : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                    )}
+                  >
+                    {filter === "ALL" ? "All" : filter.charAt(0) + filter.slice(1).toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Orders Table */}
+            <div className="rounded-2xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Order ID</th>
+                      <th className="py-3 px-4">Investor / Phone</th>
+                      <th className="py-3 px-4">Plan Name</th>
+                      <th className="py-3 px-4">Amount</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">UTR / Gateway Ref</th>
+                      <th className="py-3 px-4">Date & Time</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-medium">
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-8 text-center text-slate-500">
+                          No deposit orders found matching your search
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map((o, i) => {
+                        const isSuccess = o.status === "SUCCESS"
+                        const isPending = o.status === "PENDING"
+                        const isFailed = o.status === "FAILED"
+                        const isChecking = orderCheckingId === o.id
+
+                        return (
+                          <tr key={o.id} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-3 px-4 text-slate-500">{i + 1}</td>
+                            
+                            {/* Order ID */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-slate-300 text-[11px] font-bold">
+                                  {o.id}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(o.id, `ord_${o.id}`, "Order ID")}
+                                  className="text-slate-500 hover:text-amber-400 cursor-pointer"
+                                  title="Copy Order ID"
+                                >
+                                  {copiedKey === `ord_${o.id}` ? (
+                                    <CheckIcon className="size-3 text-emerald-400" />
+                                  ) : (
+                                    <CopyIcon className="size-3" />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* User details */}
+                            <td className="py-3 px-4">
+                              <div>
+                                <p className="font-bold text-white">{o.userName}</p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="font-mono text-[11px] text-amber-300 font-semibold">
+                                    {o.userPhone}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(o.userPhone, `ord_p_${o.id}`, "Phone")}
+                                    className="text-slate-500 hover:text-amber-400 cursor-pointer"
+                                  >
+                                    <CopyIcon className="size-2.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Plan Name */}
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-200">
+                                {o.planName}
+                              </span>
+                              <span className="block text-[10px] text-slate-500 font-mono">
+                                id: {o.planId}
+                              </span>
+                            </td>
+
+                            {/* Amount */}
+                            <td className="py-3 px-4 font-mono font-black text-emerald-400 text-sm">
+                              ₹{o.amount.toLocaleString("en-IN")}
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-3 px-4">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                                  isSuccess && "bg-emerald-500/15 border border-emerald-500/40 text-emerald-400",
+                                  isPending && "bg-amber-500/15 border border-amber-500/40 text-amber-400 animate-pulse",
+                                  isFailed && "bg-red-500/15 border border-red-500/40 text-red-400"
+                                )}
+                              >
+                                {isSuccess && <CheckCircle2Icon className="size-3" />}
+                                {isPending && <ClockIcon className="size-3" />}
+                                {isFailed && <XCircleIcon className="size-3" />}
+                                {o.status}
+                              </span>
+                            </td>
+
+                            {/* UTR */}
+                            <td className="py-3 px-4 font-mono text-[11px]">
+                              {o.txnId ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-amber-300 font-bold">{o.txnId}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(o.txnId!, `utr_${o.id}`, "UTR")}
+                                    className="text-slate-500 hover:text-amber-400 cursor-pointer"
+                                  >
+                                    <CopyIcon className="size-2.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+
+                            {/* Date */}
+                            <td className="py-3 px-4 text-slate-400 text-[11px]">
+                              {new Date(o.createdAt).toLocaleString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {/* Live Gateway Check */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleCheckGateway(o.id)}
+                                  disabled={isChecking}
+                                  title="Check Live Status with AeroPay Gateway"
+                                  className="inline-flex items-center gap-1 rounded-lg bg-slate-800 border border-slate-700 px-2.5 py-1 text-[11px] font-bold text-amber-400 hover:bg-slate-700 hover:text-amber-300 transition-all cursor-pointer disabled:opacity-50"
+                                >
+                                  {isChecking ? (
+                                    <RefreshCwIcon className="size-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCwIcon className="size-3" />
+                                  )}
+                                  <span>Check Gateway</span>
+                                </button>
+
+                                {/* Manual Activate Plan button if not already success */}
+                                {!isSuccess && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleManualApproveOrder(o.id)}
+                                    disabled={isChecking}
+                                    title="Manually Activate Plan for this User"
+                                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/30 transition-all cursor-pointer disabled:opacity-50"
+                                  >
+                                    <CheckIcon className="size-3" />
+                                    <span>Activate</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ── TAB 5: 3-LEVEL REFERRAL COMMISSIONS ───────────────────────────── */}
+        {activeTab === "commissions" && (
+          <div className="mt-4">
+            
+            {/* Header & Tier Filters */}
+            <div className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-black text-white flex items-center gap-2">
+                  <span>3-Level Referral Commissions Log ({filteredCommissions.length})</span>
+                  <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-xs font-black text-emerald-300 font-mono">
+                    ₹{Number(data?.stats?.totalCommissionsPaid ?? 0).toLocaleString("en-IN")} Total Paid
+                  </span>
+                </h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Complete audit trail: Level 1 (10%), Level 2 (3%), and Level 3 (1.5%) automated distributions
+                </p>
+              </div>
+
+              {/* Tier Filter Buttons */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                {(
+                  [
+                    { key: "ALL", label: `All Tiers (${data?.commissions?.length ?? 0})` },
+                    { key: "1", label: `L1 (10%) · ${data?.commissions?.filter((c) => c.level === 1).length ?? 0}` },
+                    { key: "2", label: `L2 (3%) · ${data?.commissions?.filter((c) => c.level === 2).length ?? 0}` },
+                    { key: "3", label: `L3 (1.5%) · ${data?.commissions?.filter((c) => c.level === 3).length ?? 0}` },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setCommissionFilter(f.key)}
+                    className={cn(
+                      "rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                      commissionFilter === f.key
+                        ? "bg-amber-500 text-slate-950 font-black shadow-sm"
+                        : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Commissions Table */}
+            <div className="rounded-2xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Recipient (Earner)</th>
+                      <th className="py-3 px-4">Tier / Rate</th>
+                      <th className="py-3 px-4">Payer (Buyer)</th>
+                      <th className="py-3 px-4">Order Amount</th>
+                      <th className="py-3 px-4">Commission Paid</th>
+                      <th className="py-3 px-4">Order ID</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Credited At</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-medium">
+                    {filteredCommissions.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-12 text-center text-slate-500">
+                          <Share2Icon className="size-8 mx-auto text-slate-600 mb-2" />
+                          <p className="font-bold text-slate-400">No referral commission records found</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Commissions generate automatically when users register via invite link and purchase a paid plan.
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredCommissions.map((c, i) => (
+                        <tr key={c.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-4 text-slate-500">{i + 1}</td>
+
+                          {/* Recipient */}
+                          <td className="py-3 px-4">
+                            <p className="font-bold text-white text-xs">{c.recipientName}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="font-mono font-bold text-amber-300 text-[11px]">
+                                {c.recipientPhone}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(c.recipientPhone, `recip_${c.id}`, "Phone")}
+                                className="text-slate-500 hover:text-amber-400 cursor-pointer"
+                              >
+                                {copiedKey === `recip_${c.id}` ? (
+                                  <CheckIcon className="size-3 text-emerald-400" />
+                                ) : (
+                                  <CopyIcon className="size-3" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Tier */}
+                          <td className="py-3 px-4">
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-black border font-mono",
+                                c.level === 1
+                                  ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
+                                  : c.level === 2
+                                  ? "bg-blue-500/15 border-blue-500/40 text-blue-300"
+                                  : "bg-purple-500/15 border-purple-500/40 text-purple-300"
+                              )}
+                            >
+                              <span>Level {c.level}</span>
+                              <span className="text-[10px] opacity-80">({c.percent}%)</span>
+                            </span>
+                          </td>
+
+                          {/* Payer */}
+                          <td className="py-3 px-4">
+                            <p className="font-bold text-slate-200 text-xs">{c.payerName}</p>
+                            <span className="font-mono text-[11px] text-slate-400">
+                              {c.payerPhone}
+                            </span>
+                          </td>
+
+                          {/* Order Amount */}
+                          <td className="py-3 px-4 font-mono font-bold text-slate-300">
+                            ₹{Number(c.orderAmount).toLocaleString("en-IN")}
+                          </td>
+
+                          {/* Commission Paid */}
+                          <td className="py-3 px-4">
+                            <span className="font-mono font-black text-emerald-400 text-sm">
+                              +₹{Number(c.commissionAmount).toLocaleString("en-IN")}
+                            </span>
+                          </td>
+
+                          {/* Order ID */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1 font-mono text-[11px] text-slate-400">
+                              <span className="truncate max-w-[120px]">{c.orderId}</span>
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(c.orderId, `ord_${c.id}`, "Order ID")}
+                                className="text-slate-500 hover:text-amber-400 cursor-pointer shrink-0"
+                              >
+                                <CopyIcon className="size-2.5" />
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-extrabold text-emerald-400">
+                              <CheckCircle2Icon className="size-3 text-emerald-400" />
+                              <span>PAID</span>
+                            </span>
+                          </td>
+
+                          {/* Date */}
+                          <td className="py-3 px-4 text-slate-400 text-[11px]">
+                            {new Date(c.createdAt).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            })}
+                          </td>
+
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
           </div>

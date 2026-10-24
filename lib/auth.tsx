@@ -19,7 +19,7 @@ export function avatarOf(user: AuthUser) {
 interface AuthCtx {
   user: AuthUser | null
   ready: boolean
-  signup: (name: string, phone: string, password: string) => Promise<string | null>
+  signup: (name: string, phone: string, password: string, inviteCode?: string) => Promise<string | null>
   login: (phone: string, password: string) => Promise<string | null>
   logout: () => Promise<void>
 }
@@ -39,11 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setReady(true))
   }, [])
 
-  async function signup(name: string, phone: string, password: string): Promise<string | null> {
+  async function signup(name: string, phone: string, password: string, inviteCode?: string): Promise<string | null> {
     const res = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, phone, password }),
+      body: JSON.stringify({ name, phone, password, inviteCode }),
     })
     const data = await res.json()
     if (!res.ok) return data.error ?? "Signup failed"

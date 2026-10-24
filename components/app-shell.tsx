@@ -4,10 +4,11 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { ChevronLeftIcon, HouseIcon, TrendingUpIcon, UsersIcon, UserIcon } from "lucide-react"
+import { ChevronLeftIcon, HouseIcon, TrendingUpIcon, UsersIcon, UserIcon, SendIcon } from "lucide-react"
 import "@/lib/install" // starts listening for the install prompt as early as possible
 import { avatarOf, useAuth } from "@/lib/auth"
 import { cn } from "@/lib/utils"
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt"
 
 const TABS = [
   { href: "/", label: "Home", icon: HouseIcon },
@@ -48,7 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [])
 
   // On public or admin pages render bare (no shell chrome)
-  if (isPublic || isAdmin) return <>{children}</>
+  if (isPublic || isAdmin) return <>{children}<PwaInstallPrompt /></>
 
   // While auth is loading, show nothing (avoids flash)
   if (!ready || !user) return null
@@ -70,7 +71,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <h1 className="text-base font-bold text-slate-800">{title}</h1>
             </div>
           ) : (
-            <div className="size-9" aria-hidden />
+            <a
+              href="https://t.me/paisax025"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Telegram Support"
+              title="Official Telegram Support @paisax025"
+              className="flex size-9 items-center justify-center rounded-full bg-sky-50 text-sky-600 border border-sky-200/80 shadow-xs hover:bg-sky-100 active:scale-95 transition-all"
+            >
+              <SendIcon className="size-4 -rotate-12" />
+            </a>
           )}
 
           {!title && (
@@ -150,6 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </ul>
       </nav>
+      <PwaInstallPrompt />
     </div>
   )
 }

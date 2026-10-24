@@ -11,9 +11,14 @@ const dmSans = DM_Sans({ variable: "--font-dm", subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "PaisaX · Daily Earning Game",
-  description: "Subscribe to plans, earn daily returns for 30 days. Jio, Airtel, Tata, Tesla – choose your earning plan.",
+  description: "Subscribe to plans, earn daily returns for 30 days. Solar energy – choose your earning plan.",
   applicationName: "PaisaX",
-  appleWebApp: { capable: true, title: "PaisaX", statusBarStyle: "default" },
+  manifest: "/manifest.json",
+  appleWebApp: { capable: true, title: "PaisaX", statusBarStyle: "black-translucent" },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
 }
 
 export const viewport: Viewport = { themeColor: "#ffffff", viewportFit: "cover" }

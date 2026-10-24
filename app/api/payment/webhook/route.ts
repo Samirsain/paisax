@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { verifySignature } from "@/lib/aeropay"
 import { AEROPAY_CALLBACK_IP } from "@/lib/gateway-config"
+import { creditOrderToUser } from "@/lib/order-credit"
 
 /**
  * POST /api/payment/webhook
@@ -128,34 +129,14 @@ async function handleDeposit(
       return new NextResponse("ok", { status: 200 })
     }
 
-    // Credit the plan to user's game state (atomic update)
-    const updated = await db`
-      UPDATE orders
-      SET status = 'SUCCESS',
-          credited_to_wallet = true,
-          updated_at = now()
-      WHERE id = ${orderNo} AND credited_to_wallet = false
-      RETURNING user_id, plan_id
-    `.catch(() => [])
-
-    if (updated.length === 0) {
-      console.log(`[Webhook] Deposit ${orderNo} concurrent credit — skipping`)
-      return new NextResponse("ok", { status: 200 })
+    try {
+      await creditOrderToUser(orderNo, utr)
+      console.log(`[Webhook] Deposit ${orderNo} SUCCESS — credited to user ${order.user_id}`)
+    } catch (creditErr) {
+      console.error(`[Webhook] Failed to credit ${orderNo}:`, creditErr)
+      return new NextResponse("error", { status: 500 })
     }
 
-    const { user_id, plan_id } = updated[0]
-
-    // Mark plan as purchased in game state
-    await db`
-      UPDATE game_states
-      SET state = jsonb_set(COALESCE(state,'{}'), '{pendingPlan}', ${JSON.stringify(plan_id)}::jsonb),
-          updated_at = now()
-      WHERE user_id = ${user_id}
-    `.catch((err: unknown) => {
-      console.error(`[Webhook] Failed to update game state for ${orderNo}:`, err)
-    })
-
-    console.log(`[Webhook] Deposit ${orderNo} SUCCESS — plan ${plan_id} credited to user ${user_id}`)
     return new NextResponse("ok", { status: 200 })
   } else {
     // Any non-1 state = failure — but don't overwrite a successful credit

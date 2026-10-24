@@ -86,9 +86,9 @@ export const PLANS: Plan[] = [
     id: "solar_50000",
     name: "Solar Megawatt Farm – Royal VIP",
     tag: "Royal King",
-    blurb: "Industrial Solar Farm ownership! Har din ₹12,000 direct bank withdrawal. 120 din me ₹14.4 Lakh ka bumper return.",
+    blurb: "Industrial Solar Farm ownership! Har din ₹6,000 direct bank withdrawal. 120 din me ₹7.2 Lakh ka bumper return.",
     cost: 50000,
-    perDay: 12000,
+    perDay: 6000,
     days: 120,
     category: "vip",
     limit: "Limit 0/10",
@@ -97,7 +97,7 @@ export const PLANS: Plan[] = [
 ]
 
 /** Withdrawal rules */
-export const WITHDRAW_MIN = 180        // minimum ₹180 as per Dairy Milk rules
+export const WITHDRAW_MIN = 200        // minimum ₹200
 export const WITHDRAW_FEE_PCT = 3      // 3% processing fee
 export const WITHDRAW_OFF_DAYS = [0, 6] // 0=Sunday, 6=Saturday — no withdrawals
 

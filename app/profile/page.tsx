@@ -23,6 +23,7 @@ import {
   UsersIcon,
   WalletIcon,
   ZapIcon,
+  SendIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
@@ -87,7 +88,7 @@ export default function ProfilePage() {
     },
     {
       title: "Withdraw Funds",
-      subtitle: "Instant Bank transfer payouts (Min ₹180)",
+      subtitle: "Instant Bank transfer payouts (Min ₹200)",
       icon: GiftIcon,
       href: "/wallet/withdraw",
     },
@@ -97,6 +98,14 @@ export default function ProfilePage() {
       icon: UsersIcon,
       href: "/refer",
       badge: state.invites > 0 ? `${state.invites} Members` : undefined,
+    },
+    {
+      title: "Telegram Official Support",
+      subtitle: "@paisax025 • 24x7 Customer Helpdesk",
+      icon: SendIcon,
+      href: "https://t.me/paisax025",
+      isExternal: true,
+      badge: "Online 24/7",
     },
   ]
 
@@ -214,32 +223,58 @@ export default function ProfilePage() {
         </h2>
 
         <div className="rounded-[26px] bg-white shadow-sm border border-amber-100 divide-y divide-amber-100/70 overflow-hidden">
-          {menuItems.map(({ title, subtitle, icon: Icon, href, badge }) => (
-            <Link
-              key={title}
-              href={href}
-              className="flex items-center justify-between p-4 hover:bg-amber-50/40 transition-colors"
-            >
-              <div className="flex items-center gap-3.5">
-                <span className="flex size-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/60 shadow-xs">
-                  <Icon className="size-5" />
-                </span>
-                <div>
-                  <p className="text-sm font-bold text-slate-900">{title}</p>
-                  <p className="text-[11px] font-medium text-slate-400">{subtitle}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {badge && (
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                    {badge}
+          {menuItems.map(({ title, subtitle, icon: Icon, href, badge, isExternal }: any) => {
+            const inner = (
+              <>
+                <div className="flex items-center gap-3.5">
+                  <span className={cn(
+                    "flex size-10 items-center justify-center rounded-2xl border shadow-xs",
+                    isExternal ? "bg-sky-50 text-sky-600 border-sky-200" : "bg-amber-50 text-amber-600 border-amber-200/60"
+                  )}>
+                    <Icon className={cn("size-5", isExternal && "-rotate-12")} />
                   </span>
-                )}
-                <ChevronRightIcon className="size-4 text-slate-400" />
-              </div>
-            </Link>
-          ))}
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{title}</p>
+                    <p className="text-[11px] font-medium text-slate-400">{subtitle}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {badge && (
+                    <span className={cn(
+                      "rounded-full px-2.5 py-0.5 text-[10px] font-bold border",
+                      isExternal
+                        ? "bg-sky-50 text-sky-700 border-sky-200"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    )}>
+                      {badge}
+                    </span>
+                  )}
+                  <ChevronRightIcon className="size-4 text-slate-400" />
+                </div>
+              </>
+            )
+
+            return isExternal ? (
+              <a
+                key={title}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-4 hover:bg-sky-50/40 transition-colors"
+              >
+                {inner}
+              </a>
+            ) : (
+              <Link
+                key={title}
+                href={href}
+                className="flex items-center justify-between p-4 hover:bg-amber-50/40 transition-colors"
+              >
+                {inner}
+              </Link>
+            )
+          })}
 
           {/* Install App row if available */}
           {pwaStatus === "prompt" && (

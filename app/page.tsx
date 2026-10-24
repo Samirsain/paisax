@@ -15,6 +15,7 @@ import {
   TrendingUpIcon,
   WalletIcon,
   ZapIcon,
+  SendIcon,
 } from "lucide-react"
 import { BuySheet } from "@/components/buy-sheet"
 import { WelcomeModal } from "@/components/welcome-modal"
@@ -177,41 +178,54 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── 3 QUICK ACTIONS (Recharge, Withdraw, Invite in Solar Yellow) ─ */}
-      <div className="grid grid-cols-3 gap-3 pt-0.5">
+      {/* ── 4 QUICK ACTIONS (Recharge, Withdraw, Invite, Telegram Support) ─ */}
+      <div className="grid grid-cols-4 gap-2 pt-0.5">
         
         {/* Recharge */}
         <Link
           href="/wallet"
-          className="flex flex-col items-center justify-center rounded-2xl bg-white p-2.5 shadow-xs border border-amber-100 active:scale-95 transition-all hover:shadow-sm"
+          className="flex flex-col items-center justify-center rounded-2xl bg-white p-2 shadow-xs border border-amber-100 active:scale-95 transition-all hover:shadow-sm"
         >
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f59e0b] to-[#d97706] text-white shadow-xs">
-            <WalletIcon className="size-5" />
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f59e0b] to-[#d97706] text-white shadow-xs">
+            <WalletIcon className="size-4.5" />
           </span>
-          <span className="mt-1.5 text-xs font-bold text-slate-800">Recharge</span>
+          <span className="mt-1 text-[11px] font-bold text-slate-800">Recharge</span>
         </Link>
 
         {/* Withdraw */}
         <Link
           href="/wallet/withdraw"
-          className="flex flex-col items-center justify-center rounded-2xl bg-white p-2.5 shadow-xs border border-amber-100 active:scale-95 transition-all hover:shadow-sm"
+          className="flex flex-col items-center justify-center rounded-2xl bg-white p-2 shadow-xs border border-amber-100 active:scale-95 transition-all hover:shadow-sm"
         >
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-slate-900 shadow-xs">
-            <GiftIcon className="size-5" />
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-slate-900 shadow-xs">
+            <GiftIcon className="size-4.5" />
           </span>
-          <span className="mt-1.5 text-xs font-bold text-slate-800">Withdraw</span>
+          <span className="mt-1 text-[11px] font-bold text-slate-800">Withdraw</span>
         </Link>
 
         {/* Invite */}
         <Link
           href="/refer"
-          className="flex flex-col items-center justify-center rounded-2xl bg-white p-2.5 shadow-xs border border-amber-100 active:scale-95 transition-all hover:shadow-sm"
+          className="flex flex-col items-center justify-center rounded-2xl bg-white p-2 shadow-xs border border-amber-100 active:scale-95 transition-all hover:shadow-sm"
         >
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f59e0b] to-[#b45309] text-white shadow-xs">
-            <Share2Icon className="size-5" />
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f59e0b] to-[#b45309] text-white shadow-xs">
+            <Share2Icon className="size-4.5" />
           </span>
-          <span className="mt-1.5 text-xs font-bold text-slate-800">Invite</span>
+          <span className="mt-1 text-[11px] font-bold text-slate-800">Invite</span>
         </Link>
+
+        {/* Telegram Support */}
+        <a
+          href="https://t.me/paisax025"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex flex-col items-center justify-center rounded-2xl bg-white p-2 shadow-xs border border-sky-100 active:scale-95 transition-all hover:shadow-sm"
+        >
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0284c7] to-[#0369a1] text-white shadow-xs">
+            <SendIcon className="size-4.5 -rotate-12" />
+          </span>
+          <span className="mt-1 text-[11px] font-bold text-slate-800">Support</span>
+        </a>
       </div>
 
       {/* ── PLAN CATEGORY TABS (Normal Plan vs VIP Plan in Solar Yellow) ── */}

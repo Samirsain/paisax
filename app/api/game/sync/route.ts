@@ -6,13 +6,13 @@ import { db } from "@/lib/db"
  * GET /api/game/sync
  *
  * Synchronizes client state with the database:
- * 1. Returns confirmed paid orders so client never loses a purchased plan
- *    even if the user closed the browser during UPI payment.
+ * 1. Returns confirmed paid orders so client never loses a purchased plan.
  * 2. Returns user profile details and any server-saved state.
  *
  * POST /api/game/sync
  *
- * Backs up the client's current game state to PostgreSQL game_states table.
+ * Backs up client game state with server-side validation:
+ * Validates that paid plans in `state.owned` are strictly backed by confirmed orders in DB.
  */
 
 export async function GET() {
@@ -82,32 +82,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid state" }, { status: 400 })
     }
 
-    // Upsert game_states table
-    await db`
-      INSERT INTO game_states (user_id, state, updated_at)
-      VALUES (${uid}, ${JSON.stringify(state)}::jsonb, now())
-      ON CONFLICT (user_id) DO UPDATE
-      SET state = ${JSON.stringify(state)}::jsonb,
-          updated_at = now()
-    `.catch(async () => {
-      // Create table if missing
-      await db`
-        CREATE TABLE IF NOT EXISTS game_states (
-          user_id UUID PRIMARY KEY REFERENCES users(id),
-          state JSONB,
-          updated_at TIMESTAMPTZ DEFAULT now()
-        )
-      `
-      await db`
-        INSERT INTO game_states (user_id, state, updated_at)
-        VALUES (${uid}, ${JSON.stringify(state)}::jsonb, now())
-        ON CONFLICT (user_id) DO UPDATE
-        SET state = ${JSON.stringify(state)}::jsonb,
-            updated_at = now()
-      `
+    // 1. Security Check: Fetch all confirmed orders for this user
+    const confirmedOrders = await db`
+      SELECT id, plan_id FROM orders WHERE user_id = ${uid} AND status = 'SUCCESS'
+    `.catch(() => [])
+
+    const confirmedOrderIds = new Set(confirmedOrders.map((o: any) => o.id))
+
+    // 2. Sanitize owned plans: A paid plan CANNOT exist without a confirmed order in DB!
+    const rawOwned = Array.isArray(state.owned) ? state.owned : []
+    const sanitizedOwned = rawOwned.filter((o: any) => {
+      if (!o || typeof o !== "object") return false
+      // Free trial plan is always allowed
+      if (o.planId === "free") return true
+      // Any other plan must be backed by a confirmed order in DB
+      return confirmedOrderIds.has(o.id)
     })
 
-    return NextResponse.json({ ok: true })
+    const sanitizedState = {
+      ...state,
+      owned: sanitizedOwned,
+    }
+
+    // Upsert game_states table with sanitized state
+    await db`
+      INSERT INTO game_states (user_id, state, updated_at)
+      VALUES (${uid}, ${JSON.stringify(sanitizedState)}::jsonb, now())
+      ON CONFLICT (user_id) DO UPDATE
+      SET state = ${JSON.stringify(sanitizedState)}::jsonb,
+          updated_at = now()
+    `
+
+    return NextResponse.json({ ok: true, sanitized: true })
   } catch (err) {
     console.error("[Sync POST Error]:", err)
     return NextResponse.json({ error: "Failed to persist state" }, { status: 500 })

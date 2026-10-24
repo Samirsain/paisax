@@ -22,11 +22,13 @@ import { Button } from "@/components/ui/button"
 import { active, completed, getPlan, ready, type Owned } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { ClaimRewardModal } from "@/components/claim-modal"
 
 export default function MyPlansPage() {
   const { ready: loaded, state, now, collect } = useStore()
   const [tab, setTab] = useState<"active" | "completed">("active")
   const [countdown, setCountdown] = useState("00:00:00")
+  const [claimedReward, setClaimedReward] = useState<{ planName: string; coins: number; day?: number } | null>(null)
 
   // Live countdown to midnight (Next income time)
   useEffect(() => {
@@ -181,7 +183,12 @@ export default function MyPlansPage() {
           /* List of Active Plan Cards */
           <div className="flex flex-col gap-3.5">
             {running.map((o) => (
-              <SolarPlanOrderCard key={o.id} owned={o} onClaim={collect} />
+              <SolarPlanOrderCard
+                key={o.id}
+                owned={o}
+                onClaim={collect}
+                onReward={(planName, coins, day) => setClaimedReward({ planName, coins, day })}
+              />
             ))}
           </div>
         )
@@ -215,6 +222,12 @@ export default function MyPlansPage() {
         </div>
       )}
 
+      {/* ── GAME THEMED CLAIM REWARD CELEBRATION MODAL ── */}
+      <ClaimRewardModal
+        reward={claimedReward}
+        onClose={() => setClaimedReward(null)}
+      />
+
     </div>
   )
 }
@@ -222,9 +235,11 @@ export default function MyPlansPage() {
 function SolarPlanOrderCard({
   owned: o,
   onClaim,
+  onReward,
 }: {
   owned: Owned
   onClaim: (id: string) => number
+  onReward: (planName: string, coins: number, day?: number) => void
 }) {
   const { now, state } = useStore()
   const plan = getPlan(o.planId)
@@ -233,9 +248,7 @@ function SolarPlanOrderCard({
 
   function handleClaim() {
     const coins = onClaim(o.id)
-    toast.success(`Claimed ₹${fmt(coins)}!`, {
-      description: `${plan.name} return credited to your wallet.`,
-    })
+    onReward(plan.name, coins, o.claimed + 1)
   }
 
   return (

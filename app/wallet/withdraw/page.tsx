@@ -16,6 +16,11 @@ import {
   ShieldCheckIcon,
   WalletIcon,
   XCircleIcon,
+  PencilIcon,
+  ChevronRightIcon,
+  RotateCcwIcon,
+  CreditCardIcon,
+  SparklesIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
@@ -23,7 +28,6 @@ import { Button } from "@/components/ui/button"
 import { canWithdrawToday, hasBoughtPaidPlan, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
-import { BankIcon } from "@/components/payment-icons"
 
 const INDIAN_PAYOUTS_POOL = [
   { name: "Rajesh Sharma", amount: 18450, time: "Just now", method: "Bank IMPS", avatar: "/avatar/1.png" },
@@ -48,6 +52,18 @@ export default function WithdrawPage() {
   const [confirmAccountNumber, setConfirmAccountNumber] = useState("")
   const [bankName, setBankName] = useState("")
   const [ifsc, setIfsc] = useState("")
+
+  // Saved Bank Details State
+  const [hasSavedBank, setHasSavedBank] = useState(false)
+  const [isEditingBank, setIsEditingBank] = useState(false)
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<{
+    accountName: string
+    accountNumber: string
+    bankName: string
+    ifsc: string
+  } | null>(null)
+
   const [step, setStep] = useState<"form" | "success">("form")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -61,6 +77,48 @@ export default function WithdrawPage() {
   } | null>(null)
   const [payouts, setPayouts] = useState(INDIAN_PAYOUTS_POOL.slice(0, 5))
   const [pulseIdx, setPulseIdx] = useState<number | null>(null)
+
+  // 1. Load saved bank details on mount (localStorage + server DB)
+  useEffect(() => {
+    // Instant cache load
+    try {
+      const cached = localStorage.getItem("paisax_saved_bank")
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (parsed.accountNumber && parsed.accountNumber.length >= 6) {
+          setAccountName(parsed.accountName || "")
+          setBankName(parsed.bankName || "")
+          setAccountNumber(parsed.accountNumber || "")
+          setConfirmAccountNumber(parsed.accountNumber || "")
+          setIfsc(parsed.ifsc || "")
+          setHasSavedBank(true)
+          setSavedSnapshot(parsed)
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Authoritative fetch from server
+    fetch("/api/wallet/withdraw")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.hasSavedBank && data.bankDetails) {
+          const b = data.bankDetails
+          setAccountName(b.accountName || "")
+          setBankName(b.bankName || "")
+          setAccountNumber(b.accountNumber || "")
+          setConfirmAccountNumber(b.accountNumber || "")
+          setIfsc(b.ifsc || "")
+          setHasSavedBank(true)
+          setSavedSnapshot(b)
+          try {
+            localStorage.setItem("paisax_saved_bank", JSON.stringify(b))
+          } catch {}
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Live rotating payouts with real Indian names & high amounts
   useEffect(() => {
@@ -100,6 +158,81 @@ export default function WithdrawPage() {
     accountNumber.trim() === confirmAccountNumber.trim() &&
     Boolean(ifsc.trim()) &&
     !loading
+
+  // Handle saving bank details directly without withdrawing
+  async function handleSaveBankDetails() {
+    if (!accountName.trim()) {
+      setError("Please enter Account Holder Name")
+      return
+    }
+    if (!accountNumber.trim() || accountNumber.trim().length < 6) {
+      setError("Please enter a valid Bank Account Number")
+      return
+    }
+    if (accountNumber.trim() !== confirmAccountNumber.trim()) {
+      setError("Account numbers do not match!")
+      return
+    }
+    if (!ifsc.trim() || ifsc.trim().length < 4) {
+      setError("Please enter a valid Bank IFSC Code")
+      return
+    }
+
+    setSavingDetails(true)
+    setError("")
+
+    try {
+      const res = await fetch("/api/wallet/withdraw", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountName: accountName.trim(),
+          accountNumber: accountNumber.trim(),
+          bankName: bankName.trim(),
+          ifsc: ifsc.trim().toUpperCase(),
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save bank details")
+      }
+
+      const updated = {
+        accountName: accountName.trim(),
+        accountNumber: accountNumber.trim(),
+        bankName: bankName.trim(),
+        ifsc: ifsc.trim().toUpperCase(),
+      }
+      setHasSavedBank(true)
+      setIsEditingBank(false)
+      setSavedSnapshot(updated)
+      try {
+        localStorage.setItem("paisax_saved_bank", JSON.stringify(updated))
+      } catch {}
+
+      toast.success("Bank details saved successfully! Future payouts will be 1-click.")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save"
+      setError(msg)
+      toast.error(msg)
+    } finally {
+      setSavingDetails(false)
+    }
+  }
+
+  // Handle Cancel Edit
+  function handleCancelEdit() {
+    if (savedSnapshot) {
+      setAccountName(savedSnapshot.accountName)
+      setAccountNumber(savedSnapshot.accountNumber)
+      setConfirmAccountNumber(savedSnapshot.accountNumber)
+      setBankName(savedSnapshot.bankName)
+      setIfsc(savedSnapshot.ifsc)
+    }
+    setIsEditingBank(false)
+    setError("")
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -166,6 +299,13 @@ export default function WithdrawPage() {
         // Ignored if local state syncs with server later
       }
 
+      const savedDetails = {
+        accountName: accountName.trim(),
+        accountNumber: accountNumber.trim(),
+        bankName: bankName.trim(),
+        ifsc: ifsc.trim().toUpperCase(),
+      }
+
       setWithdrawalInfo({
         id: data.withdrawal?.id || `W_${Date.now()}`,
         amount: amt,
@@ -175,8 +315,16 @@ export default function WithdrawPage() {
         ifsc: ifsc.trim().toUpperCase(),
       })
 
+      // Permanently remember saved bank details
+      setHasSavedBank(true)
+      setIsEditingBank(false)
+      setSavedSnapshot(savedDetails)
+      try {
+        localStorage.setItem("paisax_saved_bank", JSON.stringify(savedDetails))
+      } catch {}
+
       setStep("success")
-      toast.success("Bank withdrawal request submitted successfully!")
+      toast.success("Bank withdrawal request submitted & details saved successfully!")
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Withdrawal failed"
       setError(msg)
@@ -272,17 +420,22 @@ export default function WithdrawPage() {
             </div>
           </div>
 
+          <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
+            <CheckCircle2Icon className="size-3.5 text-emerald-600" />
+            <span>Bank details saved for automatic 1-click next withdrawal</span>
+          </div>
+
           <button
             type="button"
             onClick={() => {
               setStep("form")
               setAmount("")
-              setAccountNumber("")
-              setConfirmAccountNumber("")
+              // Keep bank details saved!
+              setIsEditingBank(false)
             }}
-            className="mt-6 w-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 py-3.5 text-sm font-extrabold text-white shadow-md active:scale-95 cursor-pointer"
+            className="mt-5 w-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 py-3.5 text-sm font-extrabold text-white shadow-md active:scale-95 cursor-pointer"
           >
-            Done
+            Back to Wallet
           </button>
         </div>
       ) : !hasPaidPlan ? (
@@ -298,24 +451,36 @@ export default function WithdrawPage() {
             Withdrawal shuru karne ke liye aapke paas kam se kam <strong className="text-amber-800">ek Paid Solar Plan</strong> hona anivarya hai (₹300 ya usse bada).
           </p>
           <div className="mt-4 rounded-2xl bg-amber-50/80 p-3.5 text-xs font-bold text-amber-950 border border-amber-200 text-left flex items-start gap-2.5">
-            <ShieldCheckIcon className="size-4.5 text-amber-600 shrink-0 mt-0.5" />
+            <InfoIcon className="size-4 text-amber-700 shrink-0 mt-0.5" />
             <span>Paid plan activate hote hi aapka direct Bank Account withdrawal turant unlock ho jayega!</span>
           </div>
           <Link
             href="/plans"
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-amber-500/30 active:scale-95 transition-all"
+            className="mt-5 flex items-center justify-center gap-2 w-full rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3.5 text-sm font-black text-white shadow-lg shadow-amber-500/25 active:scale-95 transition-all"
           >
-            <span>Browse Solar Plans (Starting ₹300)</span>
+            <span>Activate Paid Solar Plan (from ₹300)</span>
             <ArrowRightIcon className="size-4" />
           </Link>
         </div>
       ) : (
-        /* ── WITHDRAW FORM ─────────────────────────────────────────── */
-        <form onSubmit={handleSubmit} className="relative -mt-6 mx-1 rounded-[26px] bg-white p-5 shadow-xl shadow-amber-950/5 border border-amber-100/80">
-          
-          <h2 className="text-sm font-black text-slate-900">
-            Enter Withdrawal Amount
-          </h2>
+        /* ── WITHDRAWAL FORM ────────────────────────────────────────── */
+        <form
+          onSubmit={handleSubmit}
+          className="relative -mt-6 mx-1 rounded-[28px] bg-white p-5 shadow-xl shadow-amber-950/5 border border-amber-200"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+            <div>
+              <p className="text-sm font-black text-slate-900">Enter Withdrawal Amount</p>
+              <p className="text-[11px] font-medium text-slate-500">
+                Min. ₹{WITHDRAW_MIN} · Available: ₹{fmt(available)}
+              </p>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+              <CheckCircle2Icon className="size-3 text-emerald-600" />
+              <span>Unlocked</span>
+            </span>
+          </div>
 
           {/* Quick preset amount pills */}
           <div className="mt-3 grid grid-cols-4 gap-2">
@@ -379,104 +544,213 @@ export default function WithdrawPage() {
             </p>
           )}
 
-          {/* Channel Header - Bank Only */}
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs font-black text-slate-900">
-              Payout Channel
-            </p>
-            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-              Bank Transfer Only
-            </span>
-          </div>
-
-          {/* Dedicated Bank Channel Card */}
-          <div className="mt-2 rounded-2xl bg-amber-50/60 border border-amber-300/80 p-3 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-300 text-amber-700 shrink-0">
-              <Building2Icon className="size-5" />
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-900">Direct Bank Account Transfer</p>
-              <p className="text-[10px] font-medium text-slate-500">IMPS / NEFT 24×7 Instant Payout to Any Indian Bank</p>
-            </div>
-          </div>
-
-          {/* Account Details Input */}
-          <div className="mt-3.5 flex flex-col gap-2.5">
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Account Holder Full Name
-              </label>
-              <input
-                type="text"
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                placeholder="e.g. Ramesh Kumar Sharma"
-                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Bank Name (Optional)
-              </label>
-              <input
-                type="text"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                placeholder="e.g. State Bank of India / HDFC Bank"
-                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Bank Account Number
-              </label>
-              <input
-                type="text"
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
-                placeholder="Enter complete bank account number"
-                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Confirm Bank Account Number
-              </label>
-              <input
-                type="text"
-                value={confirmAccountNumber}
-                onChange={(e) => setConfirmAccountNumber(e.target.value.replace(/\D/g, ""))}
-                placeholder="Re-enter bank account number to confirm"
-                className={cn(
-                  "w-full rounded-2xl bg-slate-50 border px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono focus:border-amber-500",
-                  confirmAccountNumber && confirmAccountNumber !== accountNumber
-                    ? "border-red-400 bg-red-50/20"
-                    : "border-slate-200"
-                )}
-              />
-              {confirmAccountNumber && confirmAccountNumber !== accountNumber && (
-                <p className="mt-1 text-[10px] font-bold text-red-500">
-                  Account numbers do not match
+          {/* ── SAVED BANK ACCOUNT CARD OR EDITABLE FORM ─────────────── */}
+          <div className="mt-4 pt-3.5 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Building2Icon className="size-4 text-amber-600" />
+                <p className="text-xs font-black text-slate-900">
+                  {hasSavedBank && !isEditingBank ? "Payout Bank Account" : "Bank Account Details"}
                 </p>
+              </div>
+
+              {hasSavedBank && !isEditingBank ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingBank(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100/80 px-2.5 py-1 rounded-full border border-amber-200/80 transition-colors cursor-pointer"
+                >
+                  <PencilIcon className="size-3" />
+                  <span>Change Bank</span>
+                </button>
+              ) : hasSavedBank && isEditingBank ? (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  <RotateCcwIcon className="size-3" />
+                  <span>Use Saved</span>
+                </button>
+              ) : (
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                  <SparklesIcon className="size-2.5" />
+                  <span>Auto-Saves on Withdraw</span>
+                </span>
               )}
             </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Bank IFSC Code
-              </label>
-              <input
-                type="text"
-                value={ifsc}
-                onChange={(e) => setIfsc(e.target.value.toUpperCase())}
-                placeholder="11-digit IFSC code (e.g. SBIN0001234)"
-                maxLength={11}
-                className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono uppercase focus:border-amber-500"
-              />
-            </div>
+            {/* CASE 1: Show SAVED BANK CARD (No repetitive typing!) */}
+            {hasSavedBank && !isEditingBank ? (
+              <div className="rounded-2xl bg-gradient-to-br from-slate-950 via-[#0e1726] to-[#0c1424] border border-amber-500/40 p-4 text-white shadow-md relative overflow-hidden">
+                {/* Ambient glow decoration */}
+                <div className="absolute -top-10 -right-10 size-28 rounded-full bg-amber-500/10 blur-xl pointer-events-none" />
+                <div className="absolute -bottom-8 -left-8 size-24 rounded-full bg-yellow-500/10 blur-lg pointer-events-none" />
+
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 shrink-0">
+                      <Building2Icon className="size-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-black text-white">
+                          {bankName || "Verified Bank Account"}
+                        </p>
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/20 px-2 py-0.2 text-[9px] font-extrabold text-emerald-400 border border-emerald-500/40">
+                          <CheckCircle2Icon className="size-2.5" />
+                          <span>Saved</span>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-medium">
+                        {accountName || "Account Holder"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-bold text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                    IMPS / NEFT
+                  </span>
+                </div>
+
+                <div className="mt-3.5 pt-3 border-t border-slate-800/90 flex items-center justify-between text-xs font-mono">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-sans font-semibold">
+                      Account Number
+                    </span>
+                    <span className="font-bold text-amber-200 text-sm tracking-wider">
+                      •••• •••• {accountNumber.slice(-4)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-sans font-semibold">
+                      IFSC Code
+                    </span>
+                    <span className="font-bold text-slate-200 text-xs">
+                      {ifsc}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-emerald-400 font-semibold font-sans">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheckIcon className="size-3.5" />
+                    <span>Instant Direct Transfer Enabled</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingBank(true)}
+                    className="text-amber-400 hover:text-amber-300 underline underline-offset-2 cursor-pointer font-bold text-[11px]"
+                  >
+                    Edit details
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* CASE 2: EDITABLE INPUT FORM (First time or updating details) */
+              <div className="flex flex-col gap-2.5">
+                {isEditingBank && (
+                  <div className="rounded-xl bg-amber-50/80 p-2.5 border border-amber-200 text-[11px] text-amber-900 flex items-center justify-between">
+                    <span>Updating bank details for all future withdrawals</span>
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="font-bold text-amber-800 underline cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    Account Holder Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    placeholder="e.g. Ramesh Kumar Sharma"
+                    className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    Bank Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    placeholder="e.g. State Bank of India / HDFC Bank"
+                    className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    Bank Account Number
+                  </label>
+                  <input
+                    type="text"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Enter complete bank account number"
+                    className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    Confirm Bank Account Number
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmAccountNumber}
+                    onChange={(e) => setConfirmAccountNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Re-enter bank account number to confirm"
+                    className={cn(
+                      "w-full rounded-2xl bg-slate-50 border px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono focus:border-amber-500",
+                      confirmAccountNumber && confirmAccountNumber !== accountNumber
+                        ? "border-red-400 bg-red-50/20"
+                        : "border-slate-200"
+                    )}
+                  />
+                  {confirmAccountNumber && confirmAccountNumber !== accountNumber && (
+                    <p className="mt-1 text-[10px] font-bold text-red-500">
+                      Account numbers do not match
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    Bank IFSC Code
+                  </label>
+                  <input
+                    type="text"
+                    value={ifsc}
+                    onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+                    placeholder="11-digit IFSC code (e.g. SBIN0001234)"
+                    maxLength={11}
+                    className="w-full rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none font-mono uppercase focus:border-amber-500"
+                  />
+                </div>
+
+                {/* If editing, allow quick explicit save button */}
+                {isEditingBank && (
+                  <button
+                    type="button"
+                    onClick={handleSaveBankDetails}
+                    disabled={savingDetails || !accountName.trim() || !accountNumber.trim() || accountNumber !== confirmAccountNumber || !ifsc.trim()}
+                    className="mt-1 w-full rounded-xl bg-slate-900 text-amber-400 border border-amber-500/30 py-2.5 text-xs font-bold hover:bg-slate-800 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {savingDetails ? "Saving Details..." : "Save Bank Details"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Calculation summary */}
@@ -534,6 +808,8 @@ export default function WithdrawPage() {
               ? "Account Numbers Don't Match"
               : !ifsc.trim()
               ? "Enter Bank IFSC Code"
+              : hasSavedBank && !isEditingBank
+              ? `Confirm Transfer to Saved Account (₹${fmt(amt)})`
               : `Confirm Bank Transfer (₹${fmt(amt)})`}
           </Button>
         </form>

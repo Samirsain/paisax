@@ -85,7 +85,7 @@ export function WelcomeModal({ forceOpen, onClose }: WelcomeModalProps) {
           </div>
           <div className="rounded-2xl bg-[#fffbeb] p-2.5 border border-amber-200/60 shadow-xs text-center">
             <p className="text-[11px] font-semibold text-amber-900/80">Min withdraw</p>
-            <p className="mt-0.5 text-xl font-black text-[#b45309]">₹180</p>
+            <p className="mt-0.5 text-xl font-black text-[#b45309]">₹200</p>
           </div>
         </div>
 

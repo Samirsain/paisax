@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { AeropayService } from "@/lib/aeropay"
 import { getPlan, type PlanId } from "@/lib/game"
-import { DEPOSIT_MIN, DEPOSIT_MAX, getReturnUrl } from "@/lib/gateway-config"
+import { DEPOSIT_MIN, DEPOSIT_MAX, getReturnUrl, getCallbackUrl } from "@/lib/gateway-config"
 import crypto from "crypto"
 
 /**
@@ -104,6 +104,8 @@ export async function POST(req: NextRequest) {
     const result = await AeropayService.createPaymentSession({
       orderNo: orderId,
       amount: orderAmount.toFixed(2),
+      notifyUrl: getCallbackUrl(),
+      returnUrl: getReturnUrl(orderId),
     })
 
     // Update order with payment URL
