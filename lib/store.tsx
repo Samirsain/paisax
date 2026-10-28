@@ -98,12 +98,46 @@ export async function syncWithServer() {
 
     const currentState = getState()
     let updated = false
-    let nextState = currentState
+    let nextState = { ...currentState }
+
+    // If server has a saved state and current state is default/empty or mismatched user, hydrate from server
+    if (data.serverState && typeof data.serverState === "object") {
+      const srv = data.serverState
+      if (
+        currentState.name === "Player" ||
+        currentState.name === "Rahul" ||
+        (data.user?.name && currentState.name !== data.user.name) ||
+        (Array.isArray(srv.owned) && srv.owned.length > currentState.owned.length)
+      ) {
+        nextState = {
+          ...currentState,
+          name: data.user?.name || srv.name || currentState.name,
+          coins: Math.max(Number(srv.coins) || 0, currentState.coins),
+          lifetime: Math.max(Number(srv.lifetime) || 0, currentState.lifetime),
+          streak: Math.max(Number(srv.streak) || 0, currentState.streak),
+          bestStreak: Math.max(Number(srv.bestStreak) || 0, currentState.bestStreak),
+          inviteCode: data.user?.inviteCode || srv.inviteCode || currentState.inviteCode,
+          owned: Array.isArray(srv.owned) && srv.owned.length > 0 ? srv.owned : currentState.owned,
+          history: Array.isArray(srv.history) && srv.history.length > 0 ? srv.history : currentState.history,
+        }
+        updated = true
+      }
+    }
 
     // Sync player name and invite code from auth account
-    if (data.user?.name && (nextState.name === "Player" || nextState.name === "Rahul")) {
+    if (data.user?.name && nextState.name !== data.user.name) {
       nextState = { ...nextState, name: data.user.name, inviteCode: data.user.inviteCode || nextState.inviteCode }
       updated = true
+    }
+
+    // Merge any missing owned plans from serverState
+    if (data.serverState?.owned && Array.isArray(data.serverState.owned)) {
+      for (const srvOwned of data.serverState.owned) {
+        if (!nextState.owned.some((o) => o.id === srvOwned.id || (o.planId === srvOwned.planId && o.boughtAt === srvOwned.boughtAt))) {
+          nextState.owned = [srvOwned, ...nextState.owned]
+          updated = true
+        }
+      }
     }
 
     // Check confirmed paid orders from database and activate them if missing
@@ -125,7 +159,9 @@ export async function syncWithServer() {
             updated = true
           }
         } else {
-          const alreadyHasOrder = nextState.owned.some((o) => o.id === order.orderId)
+          const alreadyHasOrder = nextState.owned.some(
+            (o) => o.id === order.orderId || (o.planId === order.planId && Math.abs(o.boughtAt - new Date(order.createdAt).getTime()) < 60000)
+          )
           if (!alreadyHasOrder && game.PLANS.some((p) => p.id === order.planId)) {
             const boughtTime = order.createdAt ? new Date(order.createdAt).getTime() : Date.now()
             nextState = game.activatePlan(nextState, order.planId as PlanId, boughtTime, order.orderId)
@@ -139,11 +175,11 @@ export async function syncWithServer() {
       commit(() => nextState)
     }
 
-    // Persist backup state to database
+    // Persist finalized state to database
     fetch("/api/game/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ state: getState() }),
+      body: JSON.stringify({ state: nextState }),
     }).catch(() => {})
   } catch {
     // Graceful offline fallback

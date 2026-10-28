@@ -1,6 +1,7 @@
 import postgres from "postgres"
 
-const db = postgres(process.env.DATABASE_URL!, { ssl: "require" })
+const connectionString = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL!
+const db = postgres(connectionString, { ssl: "require" })
 
 async function migrate() {
   console.log("Running PaisaX schema migration...")

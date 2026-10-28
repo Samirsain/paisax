@@ -3,7 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation"
 import { useEffect, useState, Suspense } from "react"
 import { CheckCircle2Icon, ClockIcon, Loader2Icon, XCircleIcon } from "lucide-react"
-import { useStore } from "@/lib/store"
+import { useStore, syncWithServer } from "@/lib/store"
 
 function SuccessContent() {
   const searchParams = useSearchParams()
@@ -35,11 +35,12 @@ function SuccessContent() {
         if (data.status === "SUCCESS" || data.credited) {
           if (data.planId) {
             try {
-              activatePlan(data.planId)
+              activatePlan(data.planId, orderId)
             } catch {
               // ignore if already active
             }
           }
+          syncWithServer?.()
           setStatus("success")
           clearInterval(interval)
         } else if (data.status === "FAILED") {

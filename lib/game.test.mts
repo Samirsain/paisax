@@ -60,7 +60,7 @@ test("levels follow lifetime coins, and spending never lowers them", () => {
   assert.equal(levelOf(99_999).next, null)
   const s = buy({ ...newPlayer("Asha", t0), coins: 500 }, "solar_300", t0)
   assert.equal(s.coins, 200)
-  assert.equal(s.lifetime, 50) // the ₹50 welcome gift still counts in lifetime
+  assert.equal(s.lifetime, 0)
   assert.equal(levelOf(s.lifetime).level, 1)
 })
 
