@@ -29,9 +29,12 @@ import {
   SparklesIcon,
   Trash2Icon,
   PlusIcon,
+  BellRingIcon,
+  SendIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { sendTestNotification } from "@/lib/notifications"
 
 interface OwnedPlanDetail {
   id?: string
@@ -178,7 +181,7 @@ export default function AdminPage() {
 
   const [data, setData] = useState<AdminData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders" | "commissions" | "giftcards">("users")
+  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders" | "commissions" | "giftcards" | "notifications">("users")
   const [search, setSearch] = useState("")
   const [withdrawalFilter, setWithdrawalFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL")
   const [orderFilter, setOrderFilter] = useState<"ALL" | "SUCCESS" | "PENDING" | "FAILED">("ALL")
@@ -194,6 +197,18 @@ export default function AdminPage() {
   const [newGiftExpiry, setNewGiftExpiry] = useState("30")
   const [generatingGift, setGeneratingGift] = useState(false)
   const [deletingGiftId, setDeletingGiftId] = useState<string | null>(null)
+
+  // Push notifications broadcast state
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [notifLoading, setNotifLoading] = useState(false)
+  const [notifTitle, setNotifTitle] = useState("")
+  const [notifMessage, setNotifMessage] = useState("")
+  const [notifUrl, setNotifUrl] = useState("")
+  const [notifTarget, setNotifTarget] = useState<"ALL" | "PAID">("ALL")
+  const [notifApiKey, setNotifApiKey] = useState("")
+  const [broadcastingNotif, setBroadcastingNotif] = useState(false)
+  const [testingNotif, setTestingNotif] = useState(false)
+  const [deletingNotifId, setDeletingNotifId] = useState<string | null>(null)
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
@@ -320,6 +335,106 @@ export default function AdminPage() {
       toast.error("Network error while deleting gift card")
     } finally {
       setDeletingGiftId(null)
+    }
+  }
+
+  async function loadNotifications() {
+    setNotifLoading(true)
+    try {
+      const res = await fetch("/api/admin/notifications")
+      const json = await res.json()
+      if (json.notifications) {
+        setNotifications(json.notifications)
+      }
+    } catch {
+      toast.error("Failed to load notifications")
+    } finally {
+      setNotifLoading(false)
+    }
+  }
+
+  async function handleBroadcastNotification(e: React.FormEvent) {
+    e.preventDefault()
+    if (!notifTitle.trim() || !notifMessage.trim()) {
+      toast.error("Notification Title and Message are required")
+      return
+    }
+
+    setBroadcastingNotif(true)
+    try {
+      const res = await fetch("/api/admin/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: notifTitle.trim(),
+          message: notifMessage.trim(),
+          url: notifUrl.trim() || undefined,
+          target: notifTarget,
+          oneSignalApiKey: notifApiKey.trim() || undefined,
+        }),
+      })
+
+      const json = await res.json()
+      if (res.ok && json.success) {
+        toast.success("Notification broadcasted successfully!")
+        setNotifTitle("")
+        setNotifMessage("")
+        setNotifUrl("")
+        loadNotifications()
+      } else {
+        toast.error(json.error || "Failed to broadcast notification")
+      }
+    } catch {
+      toast.error("Network error while broadcasting")
+    } finally {
+      setBroadcastingNotif(false)
+    }
+  }
+
+  async function handleTestNotificationOnScreen() {
+    if (!notifTitle.trim() && !notifMessage.trim()) {
+      toast.error("Please enter a title and message first")
+      return
+    }
+    setTestingNotif(true)
+    try {
+      const success = await sendTestNotification(
+        notifTitle.trim() || "💰 PaisaX Solar Return Received",
+        notifMessage.trim() || "₹320.00 daily return has been credited to your wallet!",
+        notifUrl.trim() || "/my-plans"
+      )
+      if (success) {
+        toast.success("Test notification fired on your screen!")
+      } else {
+        toast.info("Browser notifications permission is needed or not enabled in your browser settings.")
+      }
+    } catch {
+      toast.error("Failed to trigger local notification")
+    } finally {
+      setTestingNotif(false)
+    }
+  }
+
+  async function handleDeleteNotification(id: string) {
+    if (!confirm("Are you sure you want to delete this notification record?")) return
+    setDeletingNotifId(id)
+    try {
+      const res = await fetch("/api/admin/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      const json = await res.json()
+      if (res.ok && json.success) {
+        toast.success("Notification deleted")
+        setNotifications((prev) => prev.filter((n) => n.id !== id))
+      } else {
+        toast.error(json.error || "Failed to delete notification")
+      }
+    } catch {
+      toast.error("Network error")
+    } finally {
+      setDeletingNotifId(null)
     }
   }
 
@@ -868,6 +983,25 @@ export default function AdminPage() {
               <GiftIcon className="size-3.5" />
               <span>
                 Gift Cards ({giftCards.length})
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("notifications")
+                loadNotifications()
+              }}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                activeTab === "notifications"
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                  : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800"
+              )}
+            >
+              <BellRingIcon className="size-3.5" />
+              <span>
+                Push Broadcast ({notifications.length})
               </span>
             </button>
           </div>
@@ -2100,6 +2234,348 @@ export default function AdminPage() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* ── NOTIFICATIONS BROADCAST TAB ──────────────────────────────────── */}
+        {activeTab === "notifications" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Header info card */}
+            <div className="rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-transparent border border-amber-500/20 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex size-11 items-center justify-center rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <BellRingIcon className="size-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-white">Manual Push Broadcast Center</h2>
+                    <p className="text-xs text-slate-400">
+                      Write and send custom notifications to all registered users, mobile apps & active web sessions.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={loadNotifications}
+                  disabled={notifLoading}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors self-start sm:self-auto cursor-pointer"
+                >
+                  <RefreshCwIcon className={cn("size-3.5", notifLoading && "animate-spin")} />
+                  <span>Refresh History</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Presets Bar */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+              <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">Quick Presets:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setNotifTitle("💰 Daily Returns Ready to Claim!")
+                  setNotifMessage("Your daily solar return has been generated! Claim your income now in 1 tap.")
+                  setNotifUrl("/my-plans")
+                }}
+                className="rounded-lg bg-slate-900 border border-slate-800 px-2.5 py-1 text-[11px] font-bold text-amber-300 hover:bg-slate-800 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                💰 Daily Returns
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNotifTitle("🎁 New Gift Card Code Released!")
+                  setNotifMessage("Claim free wallet cash voucher now! Paste the code in your wallet giftcard tab.")
+                  setNotifUrl("/wallet#giftcard")
+                }}
+                className="rounded-lg bg-slate-900 border border-slate-800 px-2.5 py-1 text-[11px] font-bold text-yellow-300 hover:bg-slate-800 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                🎁 Free Gift Code
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNotifTitle("✅ Bank Withdrawals Transferred")
+                  setNotifMessage("All verified withdrawals have been successfully sent to bank accounts via IMPS.")
+                  setNotifUrl("/wallet/withdraw")
+                }}
+                className="rounded-lg bg-slate-900 border border-slate-800 px-2.5 py-1 text-[11px] font-bold text-emerald-300 hover:bg-slate-800 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                🏦 Withdrawals Done
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNotifTitle("✈️ Join Official Telegram Channel")
+                  setNotifMessage("Join 20,000+ members for daily free gift codes & live payment proofs!")
+                  setNotifUrl("https://t.me/+GY7viuc1bm9lMjll")
+                }}
+                className="rounded-lg bg-slate-900 border border-slate-800 px-2.5 py-1 text-[11px] font-bold text-sky-300 hover:bg-slate-800 transition-colors whitespace-nowrap cursor-pointer"
+              >
+                ✈️ Telegram Join
+              </button>
+            </div>
+
+            {/* Broadcast Form & Live Preview Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left 2 Cols: Form */}
+              <div className="lg:col-span-2 rounded-2xl bg-[#0f172a] p-5 sm:p-6 border border-slate-800 shadow-xl">
+                <form onSubmit={handleBroadcastNotification} className="space-y-4">
+                  {/* Notification Title */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-300">
+                        Notification Title <span className="text-rose-400">*</span>
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {notifTitle.length}/60
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={notifTitle}
+                      onChange={(e) => setNotifTitle(e.target.value)}
+                      placeholder="e.g. 💰 PaisaX Solar Return Credited"
+                      maxLength={60}
+                      className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-sm font-bold text-white placeholder-slate-500 outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* Notification Message */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-300">
+                        Notification Message / Body <span className="text-rose-400">*</span>
+                      </label>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {notifMessage.length}/180
+                      </span>
+                    </div>
+                    <textarea
+                      value={notifMessage}
+                      onChange={(e) => setNotifMessage(e.target.value)}
+                      placeholder="e.g. ₹320 daily return is waiting in your account. Tap to collect your income now!"
+                      rows={3}
+                      maxLength={180}
+                      className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-500 resize-none"
+                    />
+                  </div>
+
+                  {/* Target Audience & Target URL Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                        Target Audience
+                      </label>
+                      <select
+                        value={notifTarget}
+                        onChange={(e) => setNotifTarget(e.target.value as "ALL" | "PAID")}
+                        className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-amber-500"
+                      >
+                        <option value="ALL">All Users & Devices (General Broadcast)</option>
+                        <option value="PAID">Paid Plan Investors Only</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                        Click URL / Screen (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={notifUrl}
+                        onChange={(e) => setNotifUrl(e.target.value)}
+                        placeholder="e.g. /my-plans or /wallet"
+                        className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-xs font-mono text-white placeholder-slate-500 outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* OneSignal REST API Key (Optional Override) */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 block mb-1">
+                      OneSignal REST API Key (Optional)
+                    </label>
+                    <input
+                      type="password"
+                      value={notifApiKey}
+                      onChange={(e) => setNotifApiKey(e.target.value)}
+                      placeholder="Leave blank to use server environment key (ONESIGNAL_REST_API_KEY)"
+                      className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3.5 py-2 text-xs font-mono text-slate-300 placeholder-slate-600 outline-none focus:border-amber-500"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      App ID: <span className="font-mono text-slate-400">255a95b3-0f4f-44be-b713-ee57303374a1</span>. Active browser sessions and localhost will receive it immediately via live broadcast.
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                    <button
+                      type="submit"
+                      disabled={broadcastingNotif}
+                      className="flex-1 w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 px-5 py-3 text-xs font-black text-white shadow-lg shadow-amber-500/25 hover:opacity-95 active:scale-98 disabled:opacity-50 transition-all cursor-pointer"
+                    >
+                      {broadcastingNotif ? (
+                        <>
+                          <RefreshCwIcon className="size-4 animate-spin" />
+                          <span>Broadcasting Notification...</span>
+                        </>
+                      ) : (
+                        <>
+                          <SendIcon className="size-4" />
+                          <span>🚀 Broadcast Notification to Users</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestNotificationOnScreen}
+                      disabled={testingNotif}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl bg-sky-950/80 border border-sky-800 px-4 py-3 text-xs font-bold text-sky-400 hover:bg-sky-900/60 active:scale-98 transition-all cursor-pointer"
+                      title="Test on this browser right now"
+                    >
+                      {testingNotif ? (
+                        <RefreshCwIcon className="size-3.5 animate-spin" />
+                      ) : (
+                        <BellRingIcon className="size-3.5" />
+                      )}
+                      <span>Test on My Screen</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Right 1 Col: Live Simulated Preview */}
+              <div className="rounded-2xl bg-[#0f172a] p-5 border border-slate-800 shadow-xl flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                    Live Notification Preview
+                  </h3>
+
+                  {/* Simulated Windows/Mobile Push Notification Bubble */}
+                  <div className="rounded-2xl bg-[#141d2f] border border-amber-500/30 p-3.5 shadow-2xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="size-5 rounded-md bg-amber-500 text-slate-950 flex items-center justify-center font-black text-[10px]">
+                          P
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-300">PaisaX Solar</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500">just now</span>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-black text-white">
+                        {notifTitle || "💰 PaisaX Notification Title"}
+                      </p>
+                      <p className="text-[11px] text-slate-300 leading-snug mt-0.5">
+                        {notifMessage || "Your custom notification message text will be displayed here."}
+                      </p>
+                    </div>
+
+                    {notifUrl && (
+                      <div className="pt-1 flex items-center gap-1 text-[10px] font-mono text-amber-400">
+                        <ExternalLinkIcon className="size-3" />
+                        <span className="truncate">Opens: {notifUrl}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 rounded-xl bg-slate-900/60 border border-slate-800 p-3 text-[11px] text-slate-400 space-y-1.5">
+                    <p className="font-bold text-slate-300">💡 Localhost Testing Tip:</p>
+                    <p>
+                      Click <strong>"Test on My Screen"</strong> to see native browser alerts immediately on your monitor.
+                    </p>
+                    <p>
+                      When you click <strong>"Broadcast"</strong>, any open app window on localhost:3000 will receive both an in-app banner and browser notification automatically!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                  <span>Status: Ready</span>
+                  <span className="text-emerald-400">● Live Push Engine</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Past Broadcast History Table */}
+            <div className="rounded-2xl bg-[#0f172a] border border-slate-800 shadow-xl overflow-hidden">
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <ClockIcon className="size-4 text-amber-400" />
+                  <span>Broadcast History ({notifications.length})</span>
+                </h3>
+                <span className="text-xs text-slate-400">Stored in database</span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-800">
+                    <tr>
+                      <th className="py-3 px-4">Title & Message</th>
+                      <th className="py-3 px-4">Target</th>
+                      <th className="py-3 px-4">URL</th>
+                      <th className="py-3 px-4">Sent At</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-medium text-slate-300">
+                    {notifications.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-slate-500">
+                          {notifLoading ? "Loading notifications..." : "No broadcast notifications sent yet. Use the form above to send your first alert."}
+                        </td>
+                      </tr>
+                    ) : (
+                      notifications.map((n) => (
+                        <tr key={n.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-4 max-w-xs">
+                            <p className="font-bold text-white text-xs">{n.title}</p>
+                            <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{n.message}</p>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                              {n.target}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                            {n.url || "—"}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400 whitespace-nowrap text-[11px]">
+                            {new Date(n.createdAt).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteNotification(n.id)}
+                              disabled={deletingNotifId === n.id}
+                              className="inline-flex items-center gap-1 rounded-lg bg-red-950/60 border border-red-800/60 px-2.5 py-1 text-[11px] font-bold text-red-400 hover:bg-red-900/60 cursor-pointer transition-all disabled:opacity-50"
+                            >
+                              {deletingNotifId === n.id ? (
+                                <RefreshCwIcon className="size-3 animate-spin" />
+                              ) : (
+                                <Trash2Icon className="size-3" />
+                              )}
+                              <span>Delete</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 

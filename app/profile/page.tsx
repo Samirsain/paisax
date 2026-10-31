@@ -25,6 +25,7 @@ import {
   ZapIcon,
   SendIcon,
   SparklesIcon,
+  BellRingIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
@@ -35,6 +36,7 @@ import { active, getPlan } from "@/lib/game"
 import { useInstall } from "@/lib/install"
 import { fmt, useStore } from "@/lib/store"
 import { avatarOf, useAuth } from "@/lib/auth"
+import { openNotificationPrompt, sendTestNotification } from "@/lib/notifications"
 import { cn } from "@/lib/utils"
 
 export default function ProfilePage() {
@@ -308,6 +310,53 @@ export default function ProfilePage() {
               <DownloadIcon className="size-4 text-yellow-600" />
             </button>
           )}
+
+          {/* Push Notifications trigger row */}
+          {/* Push Notifications trigger row */}
+          <div className="flex w-full items-center justify-between p-4 border-t border-amber-100/60">
+            <button
+              type="button"
+              onClick={openNotificationPrompt}
+              className="flex items-center gap-3.5 text-left flex-1 min-w-0 cursor-pointer"
+            >
+              <span className="flex size-10 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/60 shadow-xs">
+                <BellRingIcon className="size-5" />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-slate-900">Push Notifications</p>
+                <p className="text-[11px] font-medium text-slate-400">Daily earnings & payout alerts</p>
+              </div>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  const fired = await sendTestNotification(
+                    "💰 PaisaX Solar Return Received",
+                    "₹320.00 daily return has been credited to your wallet!"
+                  )
+                  if (fired) {
+                    toast.success("Test notification sent to your screen!")
+                  } else {
+                    openNotificationPrompt()
+                  }
+                }}
+                className="rounded-full bg-amber-500 text-white px-2.5 py-1 text-[10px] font-extrabold shadow-xs hover:bg-amber-600 active:scale-95 transition-all cursor-pointer"
+                title="Trigger a test notification on this device"
+              >
+                Test Alert
+              </button>
+              <button
+                type="button"
+                onClick={openNotificationPrompt}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <ChevronRightIcon className="size-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

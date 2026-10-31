@@ -190,3 +190,16 @@
   .pop-in, .glow-in, .rise, .level-flip, .fill-bar { animation: none; }
   .burst { display: none; }
 }
+
+/* ── Hide OneSignal Floating Bell Widget ────────────────────────── */
+#onesignal-bell-container,
+.onesignal-bell-container,
+#onesignal-bell-launcher,
+.onesignal-bell-launcher-button,
+.onesignal-bell-launcher-badge {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+

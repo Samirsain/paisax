@@ -12,10 +12,24 @@
 
 const ONESIGNAL_APP_ID = "255a95b3-0f4f-44be-b713-ee57303374a1"
 
+interface OneSignalInstance {
+  init: (config: Record<string, unknown>) => Promise<void>
+  login?: (id: string) => Promise<void>
+  User?: {
+    addTags?: (tags: Record<string, string>) => Promise<void>
+    PushSubscription?: {
+      optIn?: () => Promise<void>
+    }
+  }
+  Notifications?: {
+    requestPermission?: () => Promise<void>
+  }
+}
+
 declare global {
   interface Window {
-    OneSignalDeferred?: Array<(OneSignal: any) => Promise<void>>
-    OneSignal?: any
+    OneSignalDeferred?: Array<(OneSignal: OneSignalInstance) => Promise<void>>
+    OneSignal?: OneSignalInstance
   }
 }
 
@@ -40,12 +54,12 @@ export function initOneSignal() {
   loadOneSignalScript()
   
   window.OneSignalDeferred = window.OneSignalDeferred || []
-  window.OneSignalDeferred.push(async function (OneSignal: any) {
+  window.OneSignalDeferred.push(async function (OneSignal: OneSignalInstance) {
     await OneSignal.init({
       appId: ONESIGNAL_APP_ID,
       safari_web_id: "web.onesignal.auto.379e9ba9-232a-4433-a939-20e3e6310530",
       notifyButton: {
-        enable: true,
+        enable: false,
       },
       allowLocalhostAsSecureOrigin: true,
     })
@@ -57,10 +71,10 @@ export function tagOneSignalUser(userId: string, phone?: string) {
   if (typeof window === "undefined") return
   
   window.OneSignalDeferred = window.OneSignalDeferred || []
-  window.OneSignalDeferred.push(async function (OneSignal: any) {
+  window.OneSignalDeferred.push(async function (OneSignal: OneSignalInstance) {
     try {
-      await OneSignal.login(userId)
-      await OneSignal.User.addTags({
+      await OneSignal.login?.(userId)
+      await OneSignal.User?.addTags?.({
         paisax_uid: userId,
         ...(phone ? { phone } : {}),
       })
@@ -157,12 +171,127 @@ export function setupClaimReminders(getActivePlans: () => { count: number; daily
   }, 30_000)
 }
 
-/** Request notification permission proactively */
-export function requestNotificationPermission() {
+/** Request notification permission via OneSignal or native API */
+export async function requestNotificationPermission(): Promise<NotificationPermission | "unsupported"> {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported"
+  }
+
+  let permission: NotificationPermission = Notification.permission
+
+  if (permission === "granted" || permission === "denied") {
+    return permission
+  }
+
+  // 1. Try OneSignal v16 API if available
+  try {
+    if (window.OneSignal?.Notifications?.requestPermission) {
+      await window.OneSignal.Notifications.requestPermission()
+      return Notification.permission
+    }
+  } catch (err) {
+    console.warn("OneSignal requestPermission error:", err)
+  }
+
+  // 2. Native Notification.requestPermission()
+  try {
+    permission = await Notification.requestPermission()
+  } catch {
+    try {
+      permission = await new Promise((resolve) => {
+        Notification.requestPermission(resolve)
+      })
+    } catch {}
+  }
+
+  // 3. Register push opt-in with OneSignal if granted
+  if (permission === "granted") {
+    window.OneSignalDeferred = window.OneSignalDeferred || []
+    window.OneSignalDeferred.push(async function (OneSignal: OneSignalInstance) {
+      try {
+        await OneSignal.User?.PushSubscription?.optIn?.()
+      } catch {}
+    })
+  }
+
+  return permission
+}
+
+/** Local confirmation notification triggered when user grants permission */
+export function notifyPermissionGranted() {
   if (typeof window === "undefined") return
-  if (!("Notification" in window)) return
-  if (Notification.permission === "default") {
-    Notification.requestPermission()
+  if ("Notification" in window && Notification.permission === "granted") {
+    try {
+      new Notification("🎉 PaisaX Notifications Enabled!", {
+        body: "You're all set to receive daily earnings and wallet updates.",
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+      })
+    } catch {
+      navigator.serviceWorker?.ready.then((reg) => {
+        reg.showNotification("🎉 PaisaX Notifications Enabled!", {
+          body: "You're all set to receive daily earnings and wallet updates.",
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
+        })
+      }).catch(() => {})
+    }
+  }
+}
+
+/** Open the notification permission prompt popup manually */
+export function openNotificationPrompt() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("paisax_open_notification_prompt"))
+  }
+}
+
+/** Trigger an immediate test browser push notification (ideal for localhost testing) */
+export async function sendTestNotification(
+  title = "💰 PaisaX Solar Return Received",
+  message = "₹320.00 daily return has been credited to your wallet!",
+  url = "/my-plans"
+): Promise<boolean> {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return false
+  }
+
+  if (Notification.permission !== "granted") {
+    const perm = await requestNotificationPermission()
+    if (perm !== "granted") return false
+  }
+
+  try {
+    const notif = new Notification(title, {
+      body: message,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: `test-alert-${Date.now()}`,
+    })
+    if (url) {
+      notif.onclick = () => {
+        window.focus()
+        window.location.href = url
+      }
+    }
+    return true
+  } catch {
+    if (navigator.serviceWorker) {
+      try {
+        const reg = await navigator.serviceWorker.ready
+        await reg.showNotification(title, {
+          body: message,
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
+          tag: `test-alert-${Date.now()}`,
+          data: { url },
+        })
+        return true
+      } catch {
+        return false
+      }
+    }
+    return false
   }
 }
 

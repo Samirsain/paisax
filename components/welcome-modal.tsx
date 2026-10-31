@@ -1,122 +1,116 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { XIcon } from "lucide-react"
-import Image from "next/image"
+import { XIcon, SendIcon, GiftIcon, ZapIcon } from "lucide-react"
 
 interface WelcomeModalProps {
   forceOpen?: boolean
   onClose?: () => void
 }
 
+const TELEGRAM_CHANNEL_URL = "https://t.me/+GY7viuc1bm9lMjll"
+
+/**
+ * Compact, small-sized Telegram channel join modal.
+ */
 export function WelcomeModal({ forceOpen, onClose }: WelcomeModalProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+
+  const open = forceOpen !== undefined ? forceOpen : internalOpen
 
   useEffect(() => {
-    if (forceOpen !== undefined) {
-      setOpen(forceOpen)
-      return
-    }
-
     // Auto-open if user just signed up or on first visit of session
     const justRegistered = sessionStorage.getItem("solar_just_registered")
     const shownThisSession = sessionStorage.getItem("solar_welcome_shown")
 
     if (justRegistered || !shownThisSession) {
-      setOpen(true)
+      setInternalOpen(true)
       sessionStorage.setItem("solar_welcome_shown", "true")
       if (justRegistered) {
         sessionStorage.removeItem("solar_just_registered")
       }
     }
-  }, [forceOpen])
+  }, [])
 
   function handleClose() {
-    setOpen(false)
+    setInternalOpen(false)
     onClose?.()
   }
 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-[340px] rounded-[32px] bg-white px-5 pt-13 pb-5 shadow-2xl border border-amber-200/50 animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-[300px] sm:max-w-[315px] overflow-hidden rounded-[24px] bg-[#0c121e] border border-sky-500/35 p-4 sm:p-4.5 text-center shadow-[0_16px_50px_rgba(0,0,0,0.9),0_0_25px_rgba(14,165,233,0.25)] animate-in zoom-in-95 duration-200 text-white">
         
-        {/* Floating circular Solar logo badge matching user's logo.png */}
-        <div className="absolute -top-12 left-1/2 -translate-x-1/2">
-          <div className="relative size-24 rounded-full border-4 border-white bg-[#0f172a] shadow-xl overflow-hidden ring-3 ring-amber-400/50">
-            <Image
-              src="/dairymilk/logo.png"
-              alt="PaisaX Solar"
-              fill
-              className="object-cover"
-              priority
-            />
-          </div>
-        </div>
+        {/* Subtle ambient cyan glow */}
+        <div className="absolute -top-10 -right-10 size-28 rounded-full bg-sky-500/15 blur-2xl pointer-events-none" />
 
         {/* Close Button */}
         <button
           type="button"
           aria-label="Close"
           onClick={handleClose}
-          className="absolute top-3.5 right-3.5 flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors active:scale-95"
+          className="absolute top-2.5 right-2.5 flex size-6 items-center justify-center rounded-full bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors active:scale-95 cursor-pointer"
         >
-          <XIcon className="size-4" strokeWidth={2.5} />
+          <XIcon className="size-3.5" />
         </button>
 
-        {/* Title */}
-        <div className="text-center mt-1">
-          <h2 className="text-[22px] font-black text-[#0f172a] tracking-tight flex items-center justify-center gap-1.5">
-            <span>Welcome To PaisaX Solar</span>
-          </h2>
-          <div className="mx-auto mt-1.5 h-1 w-14 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 shadow-xs" />
+        {/* Compact Telegram Icon with Live Pulse Indicator */}
+        <div className="relative mx-auto mt-0.5 flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/25 via-blue-600/20 to-transparent border border-sky-400/40 shadow-[0_0_20px_rgba(14,165,233,0.3)]">
+          <SendIcon className="size-5 text-sky-400 -rotate-12 translate-x-0.5" />
+          <span className="absolute -top-1 -right-1 flex size-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex size-3 rounded-full bg-emerald-500 border border-[#0c121e]" />
+          </span>
         </div>
 
-        {/* Signup Bonus, Min Deposit & Min Withdraw Row */}
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <div className="rounded-2xl bg-amber-50 p-2.5 border border-amber-300 shadow-xs text-center">
-            <p className="text-[11px] font-bold text-amber-900">Signup Bonus</p>
-            <p className="mt-0.5 text-xl font-black text-[#b45309]">₹0</p>
-          </div>
-          <div className="rounded-2xl bg-[#fffbeb] p-2.5 border border-amber-200/60 shadow-xs text-center">
-            <p className="text-[11px] font-semibold text-amber-900/80">Min deposit</p>
-            <p className="mt-0.5 text-xl font-black text-[#b45309]">₹300</p>
-          </div>
-          <div className="rounded-2xl bg-[#fffbeb] p-2.5 border border-amber-200/60 shadow-xs text-center">
-            <p className="text-[11px] font-semibold text-amber-900/80">Min withdraw</p>
-            <p className="mt-0.5 text-xl font-black text-[#b45309]">₹200</p>
-          </div>
-        </div>
+        {/* Title & Subtitle */}
+        <h3 className="mt-2 text-base font-black text-white tracking-tight">
+          Join Official Telegram
+        </h3>
+        <p className="mt-1 text-[11px] text-slate-300 leading-snug px-1">
+          Join our channel for daily gift codes, payment proofs & live updates!
+        </p>
 
-        {/* Invite Commission Box */}
-        <div className="mt-3.5 rounded-2xl bg-[#fffbeb] p-3.5 border border-amber-200/60">
-          <p className="text-center text-xs font-bold text-amber-950 mb-2.5">
-            Invite commission
-          </p>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-white py-2 px-1 shadow-xs border border-amber-100">
-              <p className="text-[10px] font-semibold text-slate-500">Level 1</p>
-              <p className="text-lg font-black text-amber-600">10%</p>
-            </div>
-            <div className="rounded-xl bg-white py-2 px-1 shadow-xs border border-amber-100">
-              <p className="text-[10px] font-semibold text-slate-500">Level 2</p>
-              <p className="text-lg font-black text-amber-600">3%</p>
-            </div>
-            <div className="rounded-xl bg-white py-2 px-1 shadow-xs border border-amber-100">
-              <p className="text-[10px] font-semibold text-slate-500">Level 3</p>
-              <p className="text-lg font-black text-amber-600">1%</p>
-            </div>
+        {/* 2 Compact Feature Chips */}
+        <div className="mt-3 grid grid-cols-2 gap-1.5 text-left">
+          <div className="rounded-xl bg-white/[0.04] border border-white/5 p-2">
+            <p className="text-[10px] font-bold text-amber-300 flex items-center gap-1">
+              <GiftIcon className="size-3 text-amber-400" />
+              <span>Gift Codes</span>
+            </p>
+            <p className="text-[9px] text-slate-400 truncate mt-0.5">₹50 - ₹500 free cash</p>
+          </div>
+
+          <div className="rounded-xl bg-white/[0.04] border border-white/5 p-2">
+            <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+              <ZapIcon className="size-3 text-emerald-400" />
+              <span>Proofs</span>
+            </p>
+            <p className="text-[9px] text-slate-400 truncate mt-0.5">Live withdrawals</p>
           </div>
         </div>
 
-        {/* Action Button */}
+        {/* Primary CTA Button */}
+        <a
+          href={TELEGRAM_CHANNEL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleClose}
+          className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 py-2.5 text-xs font-extrabold text-white shadow-md shadow-sky-500/30 hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+        >
+          <SendIcon className="size-3.5 -rotate-12" />
+          <span>Join Telegram Channel</span>
+        </a>
+
+        {/* Secondary Dismiss */}
         <button
           type="button"
           onClick={handleClose}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3.5 text-base font-extrabold text-white shadow-lg shadow-amber-500/35 transition-all hover:opacity-95 active:scale-[0.98] cursor-pointer"
+          className="mt-1.5 w-full text-center text-[10px] font-medium text-slate-400 hover:text-slate-300 transition-colors py-0.5 cursor-pointer"
         >
-          <span>Start Earning Now</span>
+          Maybe Later
         </button>
       </div>
     </div>
