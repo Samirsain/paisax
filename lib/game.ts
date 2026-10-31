@@ -131,12 +131,14 @@ export interface Owned {
 }
 
 export type Entry = { id: string; at: number; coins: number } & (
-  | { kind: "welcome" }
+  | { kind: "welcome"; note?: string }
   | { kind: "checkin"; streakDay: number }
   | { kind: "claim"; planId: PlanId; day: number }
   | { kind: "buy"; planId: PlanId }
   | { kind: "invite" }
   | { kind: "withdraw"; amount: number; method: string }
+  | { kind: "commission"; level?: number; percent?: number; orderId?: string; orderAmount?: number; payerName?: string; payerPhone?: string }
+  | { kind: "giftcard"; code?: string; amount?: number }
 )
 
 export interface State {
@@ -209,6 +211,7 @@ export function nextClaimAt(o: Owned): number | null {
 
 export const ready = (s: State, now: number) =>
   s.owned.filter((o) => {
+    if (isDone(o)) return false
     const at = nextClaimAt(o)
     return at !== null && now >= at
   })
@@ -227,8 +230,7 @@ export function checkinDay(s: State, now: number) {
 }
 
 export function readyCoins(s: State, now: number) {
-  const day = checkinDay(s, now)
-  return (day ? checkinCoins(day) : 0) + ready(s, now).reduce((n, o) => n + getPlan(o.planId).perDay, 0)
+  return ready(s, now).reduce((n, o) => n + getPlan(o.planId).perDay, 0)
 }
 
 /** The earliest moment an active plan pays again. */
@@ -250,27 +252,40 @@ const credit = (s: State, entry: Entry): State => ({
 })
 
 /**
- * The daily action: today's check-in plus every ready plan, or just `onlyId` when given.
- * Any claim counts as the day's check-in, so the check-in rides along with the first one.
+ * Daily claim action:
+ * STRICT RULES:
+ * 1. Plan claim pays EXACTLY the plan's daily return (plan.perDay). Neither more nor less!
+ * 2. Plan can only be claimed up to its full duration (plan.days, e.g. 75 days for 75-day plans).
+ * 3. Free plan pays EXACTLY ₹10.
  */
 export function collect(s: State, now: number, onlyId?: string): State {
-  const day = checkinDay(s, now)
   const due = ready(s, now).filter((o) => !onlyId || o.id === onlyId)
-  if (onlyId && !due.length) throw new Error("This plan isn't ready yet")
-  if (!day && !due.length) throw new Error("Nothing to collect yet")
+  if (onlyId && !due.length) throw new Error("This plan isn't ready yet or has reached its full duration")
+  if (!due.length) throw new Error("Nothing to collect yet")
 
   let next = s
-  if (day) {
-    next = credit(
-      { ...next, streak: day, bestStreak: Math.max(next.bestStreak, day), lastClaimDay: dayOf(now) },
-      { id: uid(now), at: now, coins: checkinCoins(day), kind: "checkin", streakDay: day },
-    )
-  }
   for (const o of due) {
+    const plan = getPlan(o.planId)
+    // STRICT VALIDITY: Never allow claim past plan duration
+    if (o.claimed >= plan.days) {
+      continue
+    }
     const claimed = o.claimed + 1
+    // STRICT REWARD: Exactly plan.perDay, no random streak addition
     next = credit(
-      { ...next, owned: next.owned.map((x) => (x.id === o.id ? { ...x, claimed, lastClaimAt: now } : x)) },
-      { id: uid(now), at: now, coins: getPlan(o.planId).perDay, kind: "claim", planId: o.planId, day: claimed },
+      {
+        ...next,
+        lastClaimDay: dayOf(now),
+        owned: next.owned.map((x) => (x.id === o.id ? { ...x, claimed, lastClaimAt: now } : x)),
+      },
+      {
+        id: uid(now),
+        at: now,
+        coins: plan.perDay,
+        kind: "claim",
+        planId: o.planId,
+        day: claimed,
+      },
     )
   }
   return next

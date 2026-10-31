@@ -3,6 +3,7 @@
 import { useSyncExternalStore, useEffect } from "react"
 import * as game from "@/lib/game"
 import type { PlanId, State } from "@/lib/game"
+import { notifyWalletCredit } from "@/lib/notifications"
 
 const KEY = "paisax:v1"
 
@@ -100,42 +101,79 @@ export async function syncWithServer() {
     let updated = false
     let nextState = { ...currentState }
 
-    // If server has a saved state and current state is default/empty or mismatched user, hydrate from server
+    // If server has a saved state, merge serverState cleanly:
     if (data.serverState && typeof data.serverState === "object") {
       const srv = data.serverState
+
+      // 1. Sync player name and invite code from auth account
+      if (data.user?.name && nextState.name !== data.user.name) {
+        nextState.name = data.user.name
+        updated = true
+      }
+      if (data.user?.inviteCode && nextState.inviteCode !== data.user.inviteCode) {
+        nextState.inviteCode = data.user.inviteCode
+        updated = true
+      }
+
+      // 2. Sync server history (commissions, gift cards, recharge, withdrawals)
+      if (Array.isArray(srv.history)) {
+        const clientHistIds = new Set(nextState.history.map((h: any) => h?.id))
+        const newServerEntries = srv.history.filter((h: any) => h && !clientHistIds.has(h.id))
+        if (newServerEntries.length > 0) {
+          nextState.history = [...newServerEntries, ...nextState.history]
+          updated = true
+          // Notify user about new server-side credits (commissions, gift cards)
+          for (const entry of newServerEntries) {
+            if (entry.coins > 0 && (entry.kind === "commission" || entry.kind === "giftcard" || entry.kind === "welcome")) {
+              const reason = entry.kind === "commission" ? "Referral Commission" 
+                : entry.kind === "giftcard" ? "Gift Card Redeemed"
+                : "Wallet Recharge"
+              notifyWalletCredit(entry.coins, reason)
+            }
+          }
+        }
+      }
+
+      // 3. Sync coins and lifetime: Ensure referral commissions & gift cards on server are reflected in wallet
+      const srvCoins = Number(srv.coins) || 0
+      const srvLifetime = Number(srv.lifetime) || 0
+
+      if (srvCoins > nextState.coins) {
+        nextState.coins = srvCoins
+        updated = true
+      }
+      if (srvLifetime > nextState.lifetime) {
+        nextState.lifetime = srvLifetime
+        updated = true
+      }
+
+      // 4. Initial or default player hydration
       if (
         currentState.name === "Player" ||
         currentState.name === "Rahul" ||
-        (data.user?.name && currentState.name !== data.user.name) ||
         (Array.isArray(srv.owned) && srv.owned.length > currentState.owned.length)
       ) {
         nextState = {
-          ...currentState,
-          name: data.user?.name || srv.name || currentState.name,
-          coins: Math.max(Number(srv.coins) || 0, currentState.coins),
-          lifetime: Math.max(Number(srv.lifetime) || 0, currentState.lifetime),
+          ...nextState,
+          name: data.user?.name || srv.name || nextState.name,
+          coins: Math.max(srvCoins, nextState.coins),
+          lifetime: Math.max(srvLifetime, nextState.lifetime),
           streak: Math.max(Number(srv.streak) || 0, currentState.streak),
           bestStreak: Math.max(Number(srv.bestStreak) || 0, currentState.bestStreak),
-          inviteCode: data.user?.inviteCode || srv.inviteCode || currentState.inviteCode,
-          owned: Array.isArray(srv.owned) && srv.owned.length > 0 ? srv.owned : currentState.owned,
-          history: Array.isArray(srv.history) && srv.history.length > 0 ? srv.history : currentState.history,
+          inviteCode: data.user?.inviteCode || srv.inviteCode || nextState.inviteCode,
+          owned: Array.isArray(srv.owned) && srv.owned.length > 0 ? srv.owned : nextState.owned,
+          history: Array.isArray(srv.history) && srv.history.length > 0 ? srv.history : nextState.history,
         }
         updated = true
       }
-    }
 
-    // Sync player name and invite code from auth account
-    if (data.user?.name && nextState.name !== data.user.name) {
-      nextState = { ...nextState, name: data.user.name, inviteCode: data.user.inviteCode || nextState.inviteCode }
-      updated = true
-    }
-
-    // Merge any missing owned plans from serverState
-    if (data.serverState?.owned && Array.isArray(data.serverState.owned)) {
-      for (const srvOwned of data.serverState.owned) {
-        if (!nextState.owned.some((o) => o.id === srvOwned.id || (o.planId === srvOwned.planId && o.boughtAt === srvOwned.boughtAt))) {
-          nextState.owned = [srvOwned, ...nextState.owned]
-          updated = true
+      // 5. Merge any missing owned plans from serverState
+      if (Array.isArray(srv.owned)) {
+        for (const srvOwned of srv.owned) {
+          if (!nextState.owned.some((o) => o.id === srvOwned.id || (o.planId === srvOwned.planId && o.boughtAt === srvOwned.boughtAt))) {
+            nextState.owned = [srvOwned, ...nextState.owned]
+            updated = true
+          }
         }
       }
     }
@@ -192,6 +230,17 @@ const actions = {
   buy: (planId: PlanId) => commit((s, t) => game.buy(s, planId, t)),
   activatePlan: (planId: PlanId, orderId?: string) => commit((s, t) => game.activatePlan(s, planId, t, orderId)),
   withdraw: (amount: number, method = "bank") => commit((s, t) => game.withdraw(s, amount, t, method)),
+  creditWallet: (amount: number, code = "GIFT-CARD", entryId?: string) =>
+    earn((s, t) => {
+      const id = entryId || `GIFT_${Date.now()}`
+      if (s.history.some((h) => h.id === id)) return s
+      return {
+        ...s,
+        coins: s.coins + amount,
+        lifetime: s.lifetime + amount,
+        history: [{ id, at: t, coins: amount, kind: "giftcard" as const, code, amount }, ...s.history],
+      }
+    }),
   invite: () => earn(game.invite),
   rename: (name: string) => commit((s) => ({ ...s, name })),
   skipDay: () => commit((s) => ({ ...s, skew: s.skew + game.DAY_MS })),

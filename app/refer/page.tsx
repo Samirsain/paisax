@@ -599,7 +599,7 @@ export default function ReferPage() {
 
       {/* ── SHARE & INVITE MODAL ─────────────────────────────────────── */}
       <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
-        <DialogContent sheet className="border-t-4 border-amber-500 rounded-t-[32px] sm:rounded-[32px] p-6 bg-white">
+        <DialogContent sheet className="border border-amber-100 rounded-t-[32px] sm:rounded-[32px] p-6 bg-white shadow-2xl">
           <DialogHeader className="text-center">
             <DialogTitle className="text-xl font-black text-slate-900">
               Invite Friends & Earn

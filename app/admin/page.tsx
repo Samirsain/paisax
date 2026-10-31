@@ -25,6 +25,10 @@ import {
   DollarSignIcon,
   AlertTriangleIcon,
   Share2Icon,
+  GiftIcon,
+  SparklesIcon,
+  Trash2Icon,
+  PlusIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -174,12 +178,22 @@ export default function AdminPage() {
 
   const [data, setData] = useState<AdminData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders" | "commissions">("users")
+  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders" | "commissions" | "giftcards">("users")
   const [search, setSearch] = useState("")
   const [withdrawalFilter, setWithdrawalFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL")
   const [orderFilter, setOrderFilter] = useState<"ALL" | "SUCCESS" | "PENDING" | "FAILED">("ALL")
   const [commissionFilter, setCommissionFilter] = useState<"ALL" | "1" | "2" | "3">("ALL")
   const [orderCheckingId, setOrderCheckingId] = useState<string | null>(null)
+
+  // Gift card state
+  const [giftCards, setGiftCards] = useState<any[]>([])
+  const [giftLoading, setGiftLoading] = useState(false)
+  const [newGiftAmount, setNewGiftAmount] = useState("100")
+  const [newGiftCode, setNewGiftCode] = useState("")
+  const [newGiftMaxUses, setNewGiftMaxUses] = useState("1")
+  const [newGiftExpiry, setNewGiftExpiry] = useState("30")
+  const [generatingGift, setGeneratingGift] = useState(false)
+  const [deletingGiftId, setDeletingGiftId] = useState<string | null>(null)
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
@@ -199,6 +213,7 @@ export default function AdminPage() {
         setAuthenticated(res.authenticated)
         if (res.authenticated) {
           loadData()
+          loadGiftCards()
         } else {
           setLoading(false)
         }
@@ -227,6 +242,84 @@ export default function AdminPage() {
       toast.error("Network error while loading data")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadGiftCards() {
+    setGiftLoading(true)
+    try {
+      const res = await fetch("/api/admin/gift-cards")
+      const json = await res.json()
+      const cards = json.giftCards || json.cards
+      if (Array.isArray(cards)) {
+        setGiftCards(cards)
+      }
+    } catch {
+      toast.error("Failed to load gift cards")
+    } finally {
+      setGiftLoading(false)
+    }
+  }
+
+  async function handleCreateGiftCard(e: React.FormEvent) {
+    e.preventDefault()
+    const amt = parseFloat(newGiftAmount)
+    if (isNaN(amt) || amt <= 0) {
+      toast.error("Please enter a valid gift card amount")
+      return
+    }
+    setGeneratingGift(true)
+    try {
+      const res = await fetch("/api/admin/gift-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amt,
+          code: newGiftCode.trim() || undefined,
+          maxUses: parseInt(newGiftMaxUses, 10) || 1,
+          expiresInDays: parseInt(newGiftExpiry, 10) || 30,
+        }),
+      })
+      const json = await res.json()
+      const createdCard = json.giftCard || json.card
+      if (res.ok && json.success && createdCard) {
+        toast.success(`🎉 Gift card ${createdCard.code} generated!`)
+        try {
+          await navigator.clipboard.writeText(createdCard.code)
+          toast.success(`Code ${createdCard.code} copied to clipboard!`)
+        } catch {}
+        setNewGiftCode("")
+        loadGiftCards()
+      } else {
+        toast.error(json.error || "Failed to generate gift card")
+      }
+    } catch {
+      toast.error("Network error while generating gift card")
+    } finally {
+      setGeneratingGift(false)
+    }
+  }
+
+  async function handleDeleteGiftCard(id: string) {
+    if (!confirm("Are you sure you want to delete / revoke this gift card?")) return
+    setDeletingGiftId(id)
+    try {
+      const res = await fetch("/api/admin/gift-cards", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      const json = await res.json()
+      if (res.ok && json.success) {
+        toast.success("Gift card deleted")
+        loadGiftCards()
+      } else {
+        toast.error(json.error || "Failed to delete gift card")
+      }
+    } catch {
+      toast.error("Network error while deleting gift card")
+    } finally {
+      setDeletingGiftId(null)
     }
   }
 
@@ -756,6 +849,25 @@ export default function AdminPage() {
                     {data?.stats?.pendingWithdrawalsCount}
                   </span>
                 )}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("giftcards")
+                loadGiftCards()
+              }}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                activeTab === "giftcards"
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                  : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800"
+              )}
+            >
+              <GiftIcon className="size-3.5" />
+              <span>
+                Gift Cards ({giftCards.length})
               </span>
             </button>
           </div>
@@ -1681,6 +1793,307 @@ export default function AdminPage() {
 
                         </tr>
                       ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ── TAB 6: GIFT CARDS MANAGEMENT ───────────────────────────────────── */}
+        {activeTab === "giftcards" && (
+          <div className="mt-4 flex flex-col gap-5">
+            
+            {/* Header */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-1">
+              <div>
+                <h2 className="text-sm font-black text-white flex items-center gap-2">
+                  <GiftIcon className="size-4 text-amber-400" />
+                  <span>Gift Cards & Reward Codes ({giftCards.length})</span>
+                </h2>
+                <p className="text-[11px] text-slate-400">
+                  Generate unique promo and reward codes. When users redeem them, funds go directly to their wallet.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={loadGiftCards}
+                disabled={giftLoading}
+                className="flex items-center gap-1.5 self-start rounded-xl bg-slate-900 border border-slate-800 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer transition-all"
+              >
+                <RefreshCwIcon className={cn("size-3.5", giftLoading && "animate-spin text-amber-400")} />
+                <span>Refresh Cards</span>
+              </button>
+            </div>
+
+            {/* Generator Card */}
+            <div className="rounded-2xl border border-slate-800 bg-[#0e1726] p-5 shadow-xl">
+              <h3 className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                <SparklesIcon className="size-4" />
+                <span>Create New Gift Card</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Leave Code empty for an auto-generated random unique code (e.g. GIFT-9X4A-82).
+              </p>
+
+              <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-400 mr-1">Quick Presets:</span>
+                {[50, 100, 200, 500, 1000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setNewGiftAmount(String(preset))}
+                    className={cn(
+                      "rounded-lg px-2.5 py-1 text-[11px] font-black transition-all cursor-pointer border",
+                      newGiftAmount === String(preset)
+                        ? "bg-amber-500 text-slate-950 border-amber-400"
+                        : "bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500"
+                    )}
+                  >
+                    ₹{preset}
+                  </button>
+                ))}
+              </div>
+
+              <form onSubmit={handleCreateGiftCard} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                    Amount (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newGiftAmount}
+                    onChange={(e) => setNewGiftAmount(e.target.value)}
+                    placeholder="e.g. 100"
+                    required
+                    className="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3.5 text-xs font-black text-white outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                    Custom Code (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={newGiftCode}
+                    onChange={(e) => setNewGiftCode(e.target.value.toUpperCase())}
+                    placeholder="Auto-generated if empty"
+                    maxLength={25}
+                    className="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3.5 text-xs font-black text-white uppercase outline-none focus:border-amber-500 placeholder:normal-case placeholder:font-normal placeholder:text-slate-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                      Max Uses
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10000"
+                      value={newGiftMaxUses}
+                      onChange={(e) => setNewGiftMaxUses(e.target.value)}
+                      placeholder="1"
+                      className="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 text-xs font-black text-white outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                      Expiry (Days)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={newGiftExpiry}
+                      onChange={(e) => setNewGiftExpiry(e.target.value)}
+                      placeholder="30"
+                      className="w-full h-10 rounded-xl bg-slate-900 border border-slate-700 px-3 text-xs font-black text-white outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    type="submit"
+                    disabled={generatingGift || !newGiftAmount}
+                    className="w-full h-10 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 text-xs font-black text-slate-950 shadow-md shadow-amber-500/20 hover:from-amber-400 hover:to-amber-500 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {generatingGift ? (
+                      <RefreshCwIcon className="size-4 animate-spin text-slate-950" />
+                    ) : (
+                      <>
+                        <PlusIcon className="size-4" />
+                        <span>Generate Code</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Gift Cards Table */}
+            <div className="rounded-2xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-800 bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Gift Code</th>
+                      <th className="py-3 px-4">Reward Value</th>
+                      <th className="py-3 px-4">Usage / Limit</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Created Date</th>
+                      <th className="py-3 px-4">Expires</th>
+                      <th className="py-3 px-4">Redemptions</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-medium">
+                    {giftCards.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-12 text-center text-slate-500">
+                          <GiftIcon className="size-8 mx-auto text-slate-600 mb-2" />
+                          <p className="font-bold text-slate-400">No gift cards created yet</p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Use the form above to generate your first gift card code.
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      giftCards.map((g, i) => {
+                        const isExpired = g.expiresAt && new Date(g.expiresAt).getTime() < Date.now()
+                        const isFullyUsed = g.usedCount >= g.maxUses
+                        const status = isFullyUsed ? "EXHAUSTED" : isExpired ? "EXPIRED" : "ACTIVE"
+
+                        return (
+                          <tr key={g.id} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-3 px-4 text-slate-500">{i + 1}</td>
+
+                            {/* Code */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-black text-amber-300 text-xs tracking-wider bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
+                                  {g.code}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(g.code, `gift_${g.id}`, "Gift Code")}
+                                  className="text-slate-500 hover:text-amber-400 cursor-pointer"
+                                  title="Copy Code"
+                                >
+                                  {copiedKey === `gift_${g.id}` ? (
+                                    <CheckIcon className="size-3.5 text-emerald-400" />
+                                  ) : (
+                                    <CopyIcon className="size-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Reward Value */}
+                            <td className="py-3 px-4 font-mono font-black text-emerald-400 text-sm">
+                              ₹{Number(g.amount).toLocaleString("en-IN")}
+                            </td>
+
+                            {/* Usage */}
+                            <td className="py-3 px-4">
+                              <span className="font-mono font-bold text-slate-300">
+                                {g.usedCount} / {g.maxUses}
+                              </span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-3 px-4">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold border",
+                                  status === "ACTIVE"
+                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                                    : status === "EXHAUSTED"
+                                    ? "bg-slate-800 border-slate-700 text-slate-400"
+                                    : "bg-red-500/15 border-red-500/40 text-red-400"
+                                )}
+                              >
+                                {status === "ACTIVE" ? (
+                                  <CheckCircle2Icon className="size-3" />
+                                ) : (
+                                  <ClockIcon className="size-3" />
+                                )}
+                                <span>{status}</span>
+                              </span>
+                            </td>
+
+                            {/* Created */}
+                            <td className="py-3 px-4 text-slate-400 text-[11px]">
+                              {new Date(g.createdAt).toLocaleDateString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </td>
+
+                            {/* Expires */}
+                            <td className="py-3 px-4 text-slate-400 text-[11px]">
+                              {g.expiresAt ? (
+                                new Date(g.expiresAt).toLocaleDateString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })
+                              ) : (
+                                <span className="text-slate-500">Never</span>
+                              )}
+                            </td>
+
+                            {/* Redemptions count & preview */}
+                            <td className="py-3 px-4 text-[11px]">
+                              {Array.isArray(g.redemptions) && g.redemptions.length > 0 ? (
+                                <div className="space-y-0.5 max-w-[180px]">
+                                  {g.redemptions.slice(0, 2).map((r: any) => (
+                                    <p key={r.id} className="text-slate-300 truncate">
+                                      👤 {r.userName || "User"} ({r.userPhone?.slice(-4) ? `****${r.userPhone.slice(-4)}` : ""})
+                                    </p>
+                                  ))}
+                                  {g.redemptions.length > 2 && (
+                                    <p className="text-[10px] text-slate-500">
+                                      +{g.redemptions.length - 2} more
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-500 italic">No redemptions yet</span>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteGiftCard(g.id)}
+                                disabled={deletingGiftId === g.id}
+                                className="inline-flex items-center gap-1 rounded-lg bg-red-950/60 border border-red-800/60 px-2.5 py-1 text-[11px] font-bold text-red-400 hover:bg-red-900/60 cursor-pointer transition-all disabled:opacity-50"
+                                title="Delete / Revoke"
+                              >
+                                {deletingGiftId === g.id ? (
+                                  <RefreshCwIcon className="size-3 animate-spin" />
+                                ) : (
+                                  <Trash2Icon className="size-3" />
+                                )}
+                                <span>Delete</span>
+                              </button>
+                            </td>
+
+                          </tr>
+                        )
+                      })
                     )}
                   </tbody>
                 </table>

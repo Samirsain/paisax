@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter, Playfair_Display, DM_Sans } from "next/font/google"
 import { AppShell } from "@/components/app-shell"
 import { Toaster } from "@/components/ui/sonner"
+import { NotificationProvider } from "@/components/notification-provider"
 import { AuthProvider } from "@/lib/auth"
 import "./globals.css"
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       {/* Extensions such as ColorZilla add attributes to <body> before React loads. */}
       <body className="min-h-dvh" suppressHydrationWarning>
         <AuthProvider>
+          <NotificationProvider />
           <AppShell>{children}</AppShell>
           <Toaster />
         </AuthProvider>

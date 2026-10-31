@@ -354,7 +354,17 @@ export default function WithdrawPage() {
           </p>
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-bold text-amber-100">
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <Link
+            href="/wallet#history"
+            className="flex items-center gap-1.5 rounded-full bg-black/25 backdrop-blur-md px-4 py-1.5 text-xs font-black text-amber-100 border border-white/20 hover:bg-black/40 active:scale-95 transition-all"
+          >
+            <ClockIcon className="size-3.5 text-yellow-300" />
+            <span>Transaction Records</span>
+          </Link>
+        </div>
+
+        <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] font-bold text-amber-100">
           <ShieldCheckIcon className="size-3.5 text-yellow-300" />
           <span>Direct Bank Payouts · Min ₹{WITHDRAW_MIN} · 3% Tax Fee</span>
         </div>

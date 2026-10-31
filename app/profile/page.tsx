@@ -24,6 +24,7 @@ import {
   WalletIcon,
   ZapIcon,
   SendIcon,
+  SparklesIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
@@ -91,6 +92,18 @@ export default function ProfilePage() {
       subtitle: "Instant Bank transfer payouts (Min ₹200)",
       icon: GiftIcon,
       href: "/wallet/withdraw",
+    },
+    {
+      title: "Transaction Records",
+      subtitle: "Recharges, Bank Withdrawals & Daily Claims",
+      icon: HistoryIcon,
+      href: "/wallet#history",
+    },
+    {
+      title: "Redeem Gift Card",
+      subtitle: "Claim voucher codes & instant wallet rewards",
+      icon: SparklesIcon,
+      href: "/wallet#giftcard",
     },
     {
       title: "My Team & Invites",
@@ -315,7 +328,7 @@ export default function ProfilePage() {
 
       {/* ── EDIT NAME MODAL ──────────────────────────────────────────── */}
       <Dialog open={editNameOpen} onOpenChange={setEditNameOpen}>
-        <DialogContent sheet className="border-t-4 border-amber-500 rounded-t-[32px] sm:rounded-[32px] p-6">
+        <DialogContent sheet className="border border-amber-100 rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black text-slate-900">
               Change Display Name

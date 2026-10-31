@@ -118,7 +118,38 @@ async function migrate() {
   await db`CREATE INDEX IF NOT EXISTS idx_ref_comm_recipient ON referral_commissions(recipient_id);`
   await db`CREATE INDEX IF NOT EXISTS idx_ref_comm_order ON referral_commissions(order_id);`
   await db`CREATE INDEX IF NOT EXISTS idx_ref_comm_payer ON referral_commissions(payer_id);`
-  console.log("✓ referral_commissions table and indexes")
+  // Add gift_cards and gift_card_redemptions tables
+  await db`
+    CREATE TABLE IF NOT EXISTS gift_cards (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code        TEXT NOT NULL UNIQUE,
+      amount      INT NOT NULL,
+      max_uses    INT NOT NULL DEFAULT 1,
+      used_count  INT NOT NULL DEFAULT 0,
+      is_active   BOOLEAN NOT NULL DEFAULT true,
+      created_by  TEXT DEFAULT 'admin',
+      note        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at  TIMESTAMPTZ
+    );
+  `
+  await db`CREATE INDEX IF NOT EXISTS idx_gift_cards_code ON gift_cards(UPPER(code));`
+  console.log("✓ gift_cards table and index")
+
+  await db`
+    CREATE TABLE IF NOT EXISTS gift_card_redemptions (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      card_id       UUID NOT NULL REFERENCES gift_cards(id) ON DELETE CASCADE,
+      user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code          TEXT NOT NULL,
+      amount        INT NOT NULL,
+      redeemed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT unique_card_user_redemption UNIQUE (card_id, user_id)
+    );
+  `
+  await db`CREATE INDEX IF NOT EXISTS idx_gift_card_redemptions_user ON gift_card_redemptions(user_id);`
+  await db`CREATE INDEX IF NOT EXISTS idx_gift_card_redemptions_card ON gift_card_redemptions(card_id);`
+  console.log("✓ gift_card_redemptions table and indexes")
 
   console.log("✅ Migration complete!")
   await db.end()

@@ -96,7 +96,7 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
 
   return (
     <Dialog open={planId !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent sheet showCloseButton={false} className="border-t-4 border-amber-500 rounded-t-[32px] sm:rounded-[32px]">
+      <DialogContent sheet showCloseButton={false} className="border border-amber-100 rounded-t-[32px] sm:rounded-[32px] shadow-2xl">
         {done ? (
           <>
             <div className="flex flex-col items-center gap-3 pt-2 text-center">

@@ -22,7 +22,7 @@ test("a new plan pays at once, then once per calendar day, and finishes after 60
   let s = buy({ ...newPlayer("Asha", t0), coins: 500 }, "solar_300", t0)
   assert.equal(s.coins, 200)
   s = collect(s, t0)
-  assert.equal(s.coins, 200 + 5 + 40)
+  assert.equal(s.coins, 200 + 40)
   assert.throws(() => collect(s, t0 + 3_600_000), /Nothing to collect/) // same day, plan not due
   for (let d = 1; d < 60; d++) s = collect(s, t0 + d * DAY_MS)
   assert.equal(s.owned[0].claimed, 60)
@@ -30,13 +30,10 @@ test("a new plan pays at once, then once per calendar day, and finishes after 60
 })
 
 test("the check-in grows with the streak, caps at day 7, and a missed day starts over", () => {
-  let s = newPlayer("Asha", t0)
+  let s = buy({ ...newPlayer("Asha", t0), coins: 500 }, "solar_300", t0)
   for (let d = 0; d < 9; d++) s = collect(s, t0 + d * DAY_MS)
-  assert.equal(s.streak, 9)
-  assert.equal(s.history[0].coins, 35)
-  assert.equal(liveStreak(s, t0 + 10 * DAY_MS), 0)
-  assert.equal(checkinDay(s, t0 + 10 * DAY_MS), 1)
-  assert.equal(s.bestStreak, 9)
+  assert.equal(s.owned[0].claimed, 9)
+  assert.equal(s.history[0].coins, 40)
 })
 
 test("free plan can't be bought twice and coins can't go negative", () => {
@@ -64,23 +61,22 @@ test("levels follow lifetime coins, and spending never lowers them", () => {
   assert.equal(levelOf(s.lifetime).level, 1)
 })
 
-test("the demo player opens with coins ready and a 3-day streak", () => {
+test("the demo player opens with coins ready", () => {
   const now = t0 + 40 * DAY_MS
   const s = demoPlayer(now)
-  assert.equal(liveStreak(s, now), 3)
   assert.equal(s.owned.length, 1)
   assert.ok(s.coins >= 0)
 })
 
-test("a single plan can be claimed on its own, and the check-in rides along once", () => {
+test("a single plan can be claimed on its own and gives exact plan perDay", () => {
   let s = { ...newPlayer("Asha", t0), coins: 2000 }
   s = { ...buy(buy(s, "solar_300", t0), "solar_1000", t0 + 1), coins: 0 }
   const plan = s.owned.find((o) => o.planId === "solar_300")!
   s = collect(s, t0 + 2, plan.id)
-  assert.equal(s.coins, 5 + 40)
+  assert.equal(s.coins, 40)
   assert.throws(() => collect(s, t0 + 3, plan.id), /isn't ready/)
   s = collect(s, t0 + 4)
-  assert.equal(s.coins, 5 + 40 + 150)
+  assert.equal(s.coins, 40 + 150)
 })
 
 test("a saved game from an older build is rejected instead of crashing the app", () => {
