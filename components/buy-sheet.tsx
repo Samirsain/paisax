@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import Image from "next/image"
-import { CheckCircle2Icon, ClipboardCheckIcon, HouseIcon, Loader2Icon, ShieldCheckIcon, SparklesIcon, WalletIcon, ZapIcon } from "lucide-react"
+import { CheckCircle2Icon, ClipboardCheckIcon, HouseIcon, Loader2Icon, ShieldCheckIcon, SparklesIcon, ZapIcon } from "lucide-react"
 import { CoinBurst } from "@/components/coin-lottie"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -12,7 +12,7 @@ import { fmt, useStore } from "@/lib/store"
 
 /** Confirm, then redirect to AeroPay payment gateway or activate directly. */
 export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: () => void }) {
-  const { state, buy, activatePlan } = useStore()
+  const { state, activatePlan } = useStore()
   const router = useRouter()
   const [shown, setShown] = useState(planId)
   const [done, setDone] = useState(false)
@@ -28,10 +28,9 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
 
   const plan = getPlan(shown)
   const alreadyHasFree = shown === "free" && state.owned.some((o) => o.planId === "free")
-  const hasCoins = state.coins >= plan.cost && plan.cost > 0
   const go = (href: string) => { onClose(); router.push(href) }
 
-  // Direct activation (e.g. Free plan, or instant activation)
+  // Direct activation for Free plan only
   function handleDirectActivate() {
     if (alreadyHasFree) {
       setPayError("Free plan can only be claimed once per user.")
@@ -45,17 +44,7 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
     }
   }
 
-  // Pay with wallet coins
-  function handlePayWithWallet() {
-    try {
-      buy(shown!)
-      setDone(true)
-    } catch (err: unknown) {
-      setPayError(err instanceof Error ? err.message : "Insufficient balance")
-    }
-  }
-
-  // AeroPay payment gateway
+  // AeroPay payment gateway (Paid plans must be purchased via AeroPay)
   async function handlePayGateway() {
     setPaying(true)
     setPayError("")
@@ -228,20 +217,6 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
                   ) : (
                     <span>Pay ₹{fmt(plan.cost)} via UPI / AeroPay</span>
                   )}
-                </Button>
-              )}
-
-              {/* Pay with wallet coins if available */}
-              {hasCoins && (
-                <Button
-                  variant="soft"
-                  size="lg"
-                  disabled={paying}
-                  onClick={handlePayWithWallet}
-                  className="w-full rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold hover:bg-emerald-100"
-                >
-                  <WalletIcon className="size-4 text-emerald-700" />
-                  Pay with Coin Balance (₹{fmt(plan.cost)})
                 </Button>
               )}
 

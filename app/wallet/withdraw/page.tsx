@@ -25,7 +25,7 @@ import {
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
 import { Button } from "@/components/ui/button"
-import { canWithdrawToday, hasBoughtPaidPlan, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
+import { canWithdrawToday, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -54,6 +54,7 @@ export default function WithdrawPage() {
   const [ifsc, setIfsc] = useState("")
 
   // Saved Bank Details State
+  const [serverBalance, setServerBalance] = useState<number | null>(null)
   const [hasSavedBank, setHasSavedBank] = useState(false)
   const [isEditingBank, setIsEditingBank] = useState(false)
   const [savingDetails, setSavingDetails] = useState(false)
@@ -99,10 +100,13 @@ export default function WithdrawPage() {
       // ignore
     }
 
-    // Authoritative fetch from server
+    // Authoritative fetch from server (bank details + true available balance)
     fetch("/api/wallet/withdraw")
       .then((res) => res.json())
       .then((data) => {
+        if (typeof data?.availableBalance === "number") {
+          setServerBalance(data.availableBalance)
+        }
         if (data?.hasSavedBank && data.bankDetails) {
           const b = data.bankDetails
           setAccountName(b.accountName || "")
@@ -141,16 +145,14 @@ export default function WithdrawPage() {
 
   const today = canWithdrawToday()
   const dayName = new Date().toLocaleDateString("en-IN", { weekday: "long" })
-  const coins = state.coins
+  const coins = typeof serverBalance === "number" ? serverBalance : state.coins
   const available = Math.max(0, coins)
   const amt = parseInt(amount, 10) || 0
   const fee = Math.round((amt * WITHDRAW_FEE_PCT) / 100)
   const netPayout = Math.max(0, amt - fee)
-  const hasPaidPlan = hasBoughtPaidPlan(state)
 
   const isFormValid =
     today &&
-    hasPaidPlan &&
     amt >= WITHDRAW_MIN &&
     amt <= available &&
     Boolean(accountName.trim()) &&
@@ -236,11 +238,6 @@ export default function WithdrawPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!hasPaidPlan) {
-      setError("Withdrawal locked! Pehle koi bhi paid solar plan khareedein tabhi payout unlock hoga.")
-      toast.error("Withdrawal locked! Please activate a paid solar plan first.")
-      return
-    }
     if (!today) {
       setError(`Withdrawals are closed on weekends (${dayName}). Please request on Monday.`)
       return
@@ -297,6 +294,13 @@ export default function WithdrawPage() {
         withdraw(amt, "bank")
       } catch {
         // Ignored if local state syncs with server later
+      }
+
+      // Update local serverBalance state
+      if (typeof data.remainingBalance === "number") {
+        setServerBalance(data.remainingBalance)
+      } else {
+        setServerBalance(Math.max(0, available - amt))
       }
 
       const savedDetails = {
@@ -447,30 +451,6 @@ export default function WithdrawPage() {
           >
             Back to Wallet
           </button>
-        </div>
-      ) : !hasPaidPlan ? (
-        /* ── LOCKED WITHDRAWAL CARD (Paid Plan Required) ──────────── */
-        <div className="relative -mt-6 mx-1 rounded-[26px] bg-white p-6 shadow-xl shadow-amber-950/5 border border-amber-200 text-center">
-          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-500/15 border border-amber-300 text-amber-600">
-            <LockIcon className="size-7" />
-          </div>
-          <h2 className="mt-3.5 text-lg font-black text-slate-900">
-            Withdrawal Locked
-          </h2>
-          <p className="mt-1.5 text-xs font-semibold text-slate-600 leading-relaxed max-w-xs mx-auto">
-            Withdrawal shuru karne ke liye aapke paas kam se kam <strong className="text-amber-800">ek Paid Solar Plan</strong> hona anivarya hai (₹300 ya usse bada).
-          </p>
-          <div className="mt-4 rounded-2xl bg-amber-50/80 p-3.5 text-xs font-bold text-amber-950 border border-amber-200 text-left flex items-start gap-2.5">
-            <InfoIcon className="size-4 text-amber-700 shrink-0 mt-0.5" />
-            <span>Paid plan activate hote hi aapka direct Bank Account withdrawal turant unlock ho jayega!</span>
-          </div>
-          <Link
-            href="/plans"
-            className="mt-5 flex items-center justify-center gap-2 w-full rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3.5 text-sm font-black text-white shadow-lg shadow-amber-500/25 active:scale-95 transition-all"
-          >
-            <span>Activate Paid Solar Plan (from ₹300)</span>
-            <ArrowRightIcon className="size-4" />
-          </Link>
         </div>
       ) : (
         /* ── WITHDRAWAL FORM ────────────────────────────────────────── */
@@ -800,8 +780,6 @@ export default function WithdrawPage() {
           >
             {loading
               ? "Processing Bank Request..."
-              : !hasPaidPlan
-              ? "Paid Plan Required"
               : !today
               ? "Withdrawals Closed on Weekends"
               : available < WITHDRAW_MIN

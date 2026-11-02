@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { AeropayService } from "@/lib/aeropay"
 import { creditOrderToUser, parseGameState } from "@/lib/order-credit"
+import { calculateAuthoritativeBalance } from "@/app/api/wallet/withdraw/route"
 
 /**
  * GET /api/game/sync
@@ -182,6 +183,17 @@ export async function GET() {
       }
     } catch (giftReconcileErr) {
       console.warn("[Sync GET] Gift card reconcile warning:", giftReconcileErr)
+    }
+
+    // 8. Ensure serverState.coins matches authoritative ledger balance (commissions + gift cards + recharges + claims - withdrawals)
+    try {
+      const { availableBalance } = await calculateAuthoritativeBalance(uid)
+      if (Number(serverState.coins || 0) < availableBalance) {
+        serverState.coins = availableBalance
+        stateModified = true
+      }
+    } catch (balErr) {
+      console.warn("[Sync GET] Authoritative balance check warning:", balErr)
     }
 
     if (stateModified) {

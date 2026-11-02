@@ -9,13 +9,23 @@ function generateUniqueCode(prefix = "SOLAR"): string {
   return `${prefix}-${rand}-${rand2}`
 }
 
+async function isAdminAuthenticated(req: NextRequest): Promise<boolean> {
+  const reqCookie = req.cookies.get("paisax_admin_session")?.value
+  if (reqCookie === "authenticated") return true
+  try {
+    const cookieStore = await cookies()
+    const storeCookie = cookieStore.get("paisax_admin_session")?.value
+    return storeCookie === "authenticated"
+  } catch {
+    return false
+  }
+}
+
 // GET: List all gift cards and recent redemptions
 export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const adminSession = cookieStore.get("paisax_admin_session")?.value
-
-    if (adminSession !== "authenticated") {
+    const auth = await isAdminAuthenticated(req)
+    if (!auth) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -47,12 +57,12 @@ export async function GET(req: NextRequest) {
       code: c.code,
       amount: Number(c.amount),
       maxUses: Number(c.max_uses),
-      usedCount: Number(c.used_count),
+      usedCount: Number(c.used_count || 0),
       isActive: Boolean(c.is_active),
       note: c.note || "",
       createdAt: c.created_at,
       expiresAt: c.expires_at,
-      isFullyRedeemed: Number(c.used_count) >= Number(c.max_uses),
+      isFullyRedeemed: Number(c.used_count || 0) >= Number(c.max_uses || 1),
     }))
 
     const mappedRedemptions = redemptions.map((r: any) => ({
@@ -87,42 +97,52 @@ export async function GET(req: NextRequest) {
 // POST: Create a new gift card with money and unique code
 export async function POST(req: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const adminSession = cookieStore.get("paisax_admin_session")?.value
-
-    if (adminSession !== "authenticated") {
+    const auth = await isAdminAuthenticated(req)
+    if (!auth) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await req.json().catch(() => ({}))
     const rawAmount = body.amount
-    const rawCode = body.code?.trim()
+    const rawCode = typeof body.code === "string" ? body.code.trim() : ""
     const maxUses = Math.max(1, parseInt(body.maxUses, 10) || 1)
+    const expiresInDays = Math.max(1, parseInt(body.expiresInDays, 10) || 30)
     const note = body.note?.trim() || null
 
     const amount = parseInt(rawAmount, 10)
     if (isNaN(amount) || amount <= 0) {
-      return NextResponse.json({ error: "Please enter a valid gift card money amount (₹)" }, { status: 400 })
+      return NextResponse.json({ error: "Please enter a valid gift card amount (₹)" }, { status: 400 })
     }
 
-    const code = rawCode ? rawCode.toUpperCase().replace(/\s+/g, "") : generateUniqueCode()
+    // Clean and validate code
+    const code = rawCode
+      ? rawCode.toUpperCase().replace(/[^A-Z0-9_-]/g, "")
+      : generateUniqueCode()
+
+    if (!code || code.length < 3) {
+      return NextResponse.json({ error: "Gift card code must be at least 3 characters long" }, { status: 400 })
+    }
 
     // Check if code already exists
     const [existing] = await db`SELECT id FROM gift_cards WHERE UPPER(code) = ${code} LIMIT 1`
     if (existing) {
-      return NextResponse.json({ error: `Gift card code '${code}' already exists. Please choose another code.` }, { status: 400 })
+      return NextResponse.json({
+        error: `Gift card code '${code}' already exists. Please choose a different code or leave empty for auto-generation.`
+      }, { status: 400 })
     }
+
+    const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
 
     const [newCard] = await db`
       INSERT INTO gift_cards (
-        code, amount, max_uses, used_count, is_active, created_by, note, created_at
+        code, amount, max_uses, used_count, is_active, created_by, note, created_at, expires_at
       ) VALUES (
-        ${code}, ${amount}, ${maxUses}, 0, true, 'admin', ${note}, now()
+        ${code}, ${amount}, ${maxUses}, 0, true, 'admin', ${note}, now(), ${expiresAt}
       )
-      RETURNING id, code, amount, max_uses, used_count, is_active, note, created_at
+      RETURNING id, code, amount, max_uses, used_count, is_active, note, created_at, expires_at
     `
 
-    console.log(`[Admin] Generated new Gift Card: ${code} for ₹${amount} (Max uses: ${maxUses})`)
+    console.log(`[Admin] Generated new Gift Card: ${code} for ₹${amount} (Max uses: ${maxUses}, Expires in: ${expiresInDays} days)`)
 
     const cardData = {
       id: newCard.id,
@@ -133,6 +153,8 @@ export async function POST(req: NextRequest) {
       isActive: true,
       note: newCard.note,
       createdAt: newCard.created_at,
+      expiresAt: newCard.expires_at,
+      isFullyRedeemed: false,
     }
 
     return NextResponse.json({
@@ -150,10 +172,8 @@ export async function POST(req: NextRequest) {
 // DELETE: Deactivate or remove a gift card
 export async function DELETE(req: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const adminSession = cookieStore.get("paisax_admin_session")?.value
-
-    if (adminSession !== "authenticated") {
+    const auth = await isAdminAuthenticated(req)
+    if (!auth) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

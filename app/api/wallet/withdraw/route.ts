@@ -2,9 +2,87 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { WITHDRAW_MIN, WITHDRAW_FEE_PCT, canWithdrawToday } from "@/lib/game"
+import { parseGameState } from "@/lib/order-credit"
 import crypto from "crypto"
 
-// GET: Fetch user's saved bank account details
+/**
+ * Calculates the user's authoritative withdrawable balance:
+ * 1. Referral Commissions (from referral_commissions table)
+ * 2. Gift Card Redemptions (from gift_card_redemptions table)
+ * 3. Wallet Recharges (from orders table where plan_id = 'recharge' AND status = 'SUCCESS')
+ * 4. Daily Claim & Check-in Rewards (from game_states history where kind IN ('claim', 'checkin', 'welcome'))
+ * 5. Deducting all non-rejected withdrawals (status != 'REJECTED' in withdrawals table)
+ */
+export async function calculateAuthoritativeBalance(uid: string) {
+  // 1. Referral commissions earned
+  const [commRow] = await db`
+    SELECT COALESCE(SUM(commission_amount), 0) as total
+    FROM referral_commissions
+    WHERE recipient_id = ${uid}
+  `.catch(() => [{ total: 0 }])
+
+  // 2. Gift card redemptions
+  const [giftRow] = await db`
+    SELECT COALESCE(SUM(amount), 0) as total
+    FROM gift_card_redemptions
+    WHERE user_id = ${uid}
+  `.catch(() => [{ total: 0 }])
+
+  // 3. Wallet recharge deposits
+  const [rechRow] = await db`
+    SELECT COALESCE(SUM(amount), 0) as total
+    FROM orders
+    WHERE user_id = ${uid} AND plan_id = 'recharge' AND status = 'SUCCESS'
+  `.catch(() => [{ total: 0 }])
+
+  // 4. Existing non-rejected withdrawals
+  const [withRow] = await db`
+    SELECT COALESCE(SUM(amount), 0) as total
+    FROM withdrawals
+    WHERE user_id = ${uid} AND status != 'REJECTED'
+  `.catch(() => [{ total: 0 }])
+
+  // 5. Game state
+  const [gsRow] = await db`
+    SELECT state FROM game_states WHERE user_id = ${uid} LIMIT 1
+  `.catch(() => [undefined])
+
+  const state = parseGameState(gsRow?.state)
+
+  let claimTotal = 0
+  if (Array.isArray(state.history)) {
+    for (const h of state.history) {
+      if ((h.kind === "claim" || h.kind === "checkin" || h.kind === "welcome") && Number(h.coins) > 0) {
+        claimTotal += Number(h.coins)
+      }
+    }
+  }
+
+  const commTotal = Number(commRow?.total) || 0
+  const giftTotal = Number(giftRow?.total) || 0
+  const rechTotal = Number(rechRow?.total) || 0
+  const withTotal = Number(withRow?.total) || 0
+
+  // Total earned from all eligible sources
+  const totalEarned = commTotal + giftTotal + rechTotal + claimTotal
+  const stateCoins = Number(state.coins) || 0
+
+  // Effective balance is whichever is higher: computed ledger balance or current state coins
+  const calculatedBalance = totalEarned - withTotal
+  const availableBalance = Math.max(0, Math.max(calculatedBalance, stateCoins))
+
+  return {
+    availableBalance,
+    state,
+    commTotal,
+    giftTotal,
+    rechTotal,
+    claimTotal,
+    withTotal,
+  }
+}
+
+// GET: Fetch user's saved bank account details and authoritative available balance
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies()
@@ -62,8 +140,26 @@ export async function GET(req: NextRequest) {
 
     const hasSavedBank = Boolean(accountNumber && accountNumber.trim().length >= 6)
 
+    // Calculate authoritative available balance (including referral, rewards, gift cards)
+    const { availableBalance, state } = await calculateAuthoritativeBalance(uid)
+
+    // Synchronize game_states if different so entire app remains consistent
+    if (Number(state.coins) !== availableBalance) {
+      const updatedState = { ...state, coins: availableBalance }
+      await db`
+        INSERT INTO game_states (user_id, state, updated_at)
+        VALUES (${uid}, ${JSON.stringify(updatedState)}::jsonb, now())
+        ON CONFLICT (user_id) DO UPDATE
+        SET state = ${JSON.stringify(updatedState)}::jsonb,
+            updated_at = now()
+      `.catch(() => {})
+    }
+
     return NextResponse.json({
+      success: true,
       hasSavedBank,
+      availableBalance,
+      coins: availableBalance,
       bankDetails: hasSavedBank
         ? {
             accountName: accountName || user.name || "",
@@ -175,40 +271,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Check game state for balance and plan ownership
-    const [gameStateRow] = await db`SELECT state FROM game_states WHERE user_id = ${uid} LIMIT 1`
-    let state = gameStateRow?.state || {}
-    if (typeof state === "string") {
-      try {
-        state = JSON.parse(state)
-      } catch {
-        state = {}
-      }
-    }
+    // Calculate authoritative available balance (all referral earnings, rewards, gift cards are eligible)
+    const { availableBalance, state } = await calculateAuthoritativeBalance(uid)
 
-    const coins = Number(state.coins ?? 0)
-
-    // Check if user has bought at least one paid plan
-    const ownedPlans = Array.isArray(state.owned) ? state.owned : []
-    const hasPaidPlanInState = ownedPlans.some((o: any) => o?.planId && o.planId !== "free")
-
-    // Also check orders table for any confirmed paid order
-    const paidOrders = await db`
-      SELECT id FROM orders WHERE user_id = ${uid} AND status = 'SUCCESS' AND plan_id != 'free' LIMIT 1
-    `.catch(() => [])
-
-    const hasPaidPlan = hasPaidPlanInState || paidOrders.length > 0
-
-    if (!hasPaidPlan) {
+    if (amount > availableBalance) {
       return NextResponse.json(
-        { error: "Withdrawal locked! Pehle koi paid solar plan active karein." },
-        { status: 403 }
-      )
-    }
-
-    if (coins < amount) {
-      return NextResponse.json(
-        { error: `Withdrawal amount exceeds your available balance (₹${coins})` },
+        { error: `Withdrawal amount exceeds your available balance (₹${availableBalance})` },
         { status: 400 }
       )
     }
@@ -218,7 +286,7 @@ export async function POST(req: NextRequest) {
     const withdrawId = `W_${Date.now()}_${crypto.randomBytes(3).toString("hex").toUpperCase()}`
 
     // Deduct coins & update game state
-    const nextCoins = coins - amount
+    const nextCoins = Math.max(0, availableBalance - amount)
     const now = Date.now()
     const historyEntry = {
       id: withdrawId,
@@ -265,11 +333,14 @@ export async function POST(req: NextRequest) {
 
     // 3. Update game_states table
     await db`
-      UPDATE game_states
+      INSERT INTO game_states (user_id, state, updated_at)
+      VALUES (${uid}, ${JSON.stringify(updatedState)}::jsonb, now())
+      ON CONFLICT (user_id) DO UPDATE
       SET state = ${JSON.stringify(updatedState)}::jsonb,
           updated_at = now()
-      WHERE user_id = ${uid}
     `
+
+    console.log(`[Withdrawal] Success: user ${uid} requested ₹${amount} (Net: ₹${netAmount}), Remaining balance: ₹${nextCoins}`)
 
     return NextResponse.json({
       success: true,

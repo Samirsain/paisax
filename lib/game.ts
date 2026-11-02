@@ -340,14 +340,13 @@ export function buy(s: State, planId: PlanId, now: number): State {
   const reason = cantBuy(s, planId)
   if (reason) throw new Error(reason)
   const plan = getPlan(planId)
-  if (plan.cost > 0 && s.coins < plan.cost) {
-    throw new Error("Not enough coins")
+  if (plan.cost > 0) {
+    throw new Error("Paid solar plans can only be purchased directly via AeroPay online payment, not wallet coins.")
   }
   const owned: Owned = { id: uid(now), planId, claimed: 0, boughtAt: now, lastClaimAt: null }
-  const coinsDeduction = plan.cost > 0 ? -plan.cost : 0
   return credit(
     { ...s, owned: sanitizeOwned([owned, ...s.owned]) },
-    { id: uid(now), at: now, coins: coinsDeduction, kind: "buy", planId }
+    { id: uid(now), at: now, coins: 0, kind: "buy", planId }
   )
 }
 

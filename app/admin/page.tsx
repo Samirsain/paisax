@@ -304,6 +304,7 @@ export default function AdminPage() {
           toast.success(`Code ${createdCard.code} copied to clipboard!`)
         } catch {}
         setNewGiftCode("")
+        setGiftCards((prev) => [createdCard, ...prev.filter((c: any) => c.id !== createdCard.id)])
         loadGiftCards()
       } else {
         toast.error(json.error || "Failed to generate gift card")
