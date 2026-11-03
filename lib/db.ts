@@ -13,9 +13,9 @@ export const db =
   globalForDb._db ??
   postgres(connectionString, {
     ssl: "require",
-    max: 3,
+    max: 5,
     idle_timeout: 20,
-    connect_timeout: 30,
+    connect_timeout: 60,
     max_lifetime: 60 * 30,
     // Vercel functions are short-lived — don't keep idle connections
     connection: {

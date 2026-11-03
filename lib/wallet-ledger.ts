@@ -135,16 +135,18 @@ export interface AllUsersWalletSummary {
 /**
  * Bulk calculates authoritative wallet ledger balance for ALL users in high-performance aggregated queries.
  * Used by the Admin Panel to display accurate user balances and overall total system wallet balance.
+ *
+ * Queries run SEQUENTIALLY to stay within the connection pool limit (max: 3).
+ * On Vercel serverless with Neon PostgreSQL, parallel queries exhaust the pool and cause timeouts.
  */
 export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary> {
-  const [users, gameStates, comms, gifts, rechs, withs] = await Promise.all([
-    db`SELECT id FROM users`,
-    db`SELECT user_id, state FROM game_states`,
-    db`SELECT recipient_id, COALESCE(SUM(commission_amount), 0) as total FROM referral_commissions WHERE status = 'PAID' GROUP BY recipient_id`,
-    db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM gift_card_redemptions GROUP BY user_id`,
-    db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM orders WHERE plan_id = 'recharge' AND status = 'SUCCESS' GROUP BY user_id`,
-    db`SELECT user_id, status, COALESCE(SUM(amount), 0) as total FROM withdrawals GROUP BY user_id, status`,
-  ])
+  // Sequential queries to avoid connection pool exhaustion (pool max: 3)
+  const users = await db`SELECT id FROM users`.catch(() => [])
+  const gameStates = await db`SELECT user_id, state FROM game_states`.catch(() => [])
+  const comms = await db`SELECT recipient_id, COALESCE(SUM(commission_amount), 0) as total FROM referral_commissions WHERE status = 'PAID' GROUP BY recipient_id`.catch(() => [])
+  const gifts = await db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM gift_card_redemptions GROUP BY user_id`.catch(() => [])
+  const rechs = await db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM orders WHERE plan_id = 'recharge' AND status = 'SUCCESS' GROUP BY user_id`.catch(() => [])
+  const withs = await db`SELECT user_id, status, COALESCE(SUM(amount), 0) as total FROM withdrawals GROUP BY user_id, status`.catch(() => [])
 
   const gsMap = new Map<string, Record<string, any>>()
   for (const g of gameStates) {

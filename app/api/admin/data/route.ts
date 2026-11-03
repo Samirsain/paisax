@@ -140,8 +140,16 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // Precompute authoritative wallet summary for all users
-    const { userSummaryMap, totalWalletBalance } = await getAllUsersWalletSummary()
+    // Precompute authoritative wallet summary for all users (with fallback)
+    let userSummaryMap = new Map<string, import("@/lib/wallet-ledger").UserWalletSummary>()
+    let totalWalletBalance = 0
+    try {
+      const walletResult = await getAllUsersWalletSummary()
+      userSummaryMap = walletResult.userSummaryMap
+      totalWalletBalance = walletResult.totalWalletBalance
+    } catch (err) {
+      console.error("[Admin] Wallet summary failed, falling back to state.coins:", err)
+    }
 
     // Parse and enrich users
     const users = usersRows.map((u: any) => {
