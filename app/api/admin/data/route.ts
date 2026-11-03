@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { getPlan, type PlanId } from "@/lib/game"
+import { getAllUsersWalletSummary } from "@/lib/wallet-ledger"
 
 export async function GET(req: NextRequest) {
   try {
@@ -139,6 +140,9 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    // Precompute authoritative wallet summary for all users
+    const { userSummaryMap, totalWalletBalance } = await getAllUsersWalletSummary()
+
     // Parse and enrich users
     const users = usersRows.map((u: any) => {
       let state = u.state || {}
@@ -149,6 +153,8 @@ export async function GET(req: NextRequest) {
           state = {}
         }
       }
+      const walletSummary = userSummaryMap.get(u.id)
+      const userCoins = typeof walletSummary?.availableBalance === "number" ? walletSummary.availableBalance : Number(state.coins ?? 0)
       const owned = Array.isArray(state.owned) ? state.owned : []
       const paidOwned = owned.filter((o: any) => o?.planId && o.planId !== "free")
       const userOrders = ordersRows.filter((o: any) => o.user_id === u.id)
@@ -186,8 +192,8 @@ export async function GET(req: NextRequest) {
         directInvitesCount: directInvites,
         totalCommissionEarned,
         createdAt: u.created_at,
-        coins: Number(state.coins ?? 0),
-        lifetime: Number(state.lifetime ?? 0),
+        coins: userCoins,
+        lifetime: walletSummary ? Math.max(Number(state.lifetime ?? 0), walletSummary.totalEarned) : Number(state.lifetime ?? 0),
         hasPaidPlan: hasPaid,
         paidPlansCount: paidOwned.length || successfulOrders.length,
         totalDepositsAmount,
@@ -292,6 +298,7 @@ export async function GET(req: NextRequest) {
       stats: {
         totalUsers,
         paidUsersCount,
+        totalWalletBalance,
         totalDeposits,
         totalDepositsCount,
         totalOrdersCount: ordersRows.length,

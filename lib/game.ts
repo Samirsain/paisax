@@ -354,11 +354,10 @@ export function buy(s: State, planId: PlanId, now: number): State {
 export function withdraw(s: State, amount: number, now: number, method = "bank"): State {
   if (amount < WITHDRAW_MIN) throw new Error(`Minimum withdrawal is ₹${WITHDRAW_MIN}`)
   if (s.coins < amount) throw new Error("Withdrawal amount exceeds your available balance")
-  if (!hasBoughtPaidPlan(s)) throw new Error("Pehle koi paid solar plan active karein")
 
   return {
     ...s,
-    coins: s.coins - amount,
+    coins: Math.max(0, s.coins - amount),
     history: [
       { id: uid(now), at: now, coins: -amount, kind: "withdraw", amount, method },
       ...s.history,

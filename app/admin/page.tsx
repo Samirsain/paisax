@@ -31,6 +31,7 @@ import {
   PlusIcon,
   BellRingIcon,
   SendIcon,
+  WalletIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -155,6 +156,7 @@ interface AdminData {
   stats: {
     totalUsers: number
     paidUsersCount: number
+    totalWalletBalance?: number
     totalDeposits: number
     totalDepositsCount: number
     totalOrdersCount: number
@@ -784,8 +786,8 @@ export default function AdminPage() {
 
       <main className="mx-auto max-w-7xl px-4 pt-6 sm:px-6">
         
-        {/* ── 5 KPI STATS CARDS ──────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
+        {/* ── 6 KPI STATS CARDS ──────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 sm:gap-4">
           
           {/* Total Users */}
           <div className="rounded-2xl bg-gradient-to-b from-slate-900 to-[#0e1726] p-4 border border-slate-800 shadow-lg">
@@ -816,6 +818,22 @@ export default function AdminPage() {
             </p>
             <p className="mt-1 text-[11px] font-medium text-slate-400">
               Active solar investors
+            </p>
+          </div>
+
+          {/* Total Wallet Balance */}
+          <div className="rounded-2xl bg-gradient-to-b from-slate-900 to-[#0e1726] p-4 border border-cyan-500/30 shadow-lg shadow-cyan-500/5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-cyan-400">Total User Balance</span>
+              <div className="flex size-7 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400">
+                <WalletIcon className="size-4" />
+              </div>
+            </div>
+            <p className="mt-2 text-2xl font-black text-cyan-400 sm:text-3xl">
+              ₹{Number(data?.stats?.totalWalletBalance ?? 0).toLocaleString("en-IN")}
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-slate-400">
+              Across all user wallets
             </p>
           </div>
 

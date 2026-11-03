@@ -45,7 +45,7 @@ const INDIAN_PAYOUTS_POOL = [
 ]
 
 export default function WithdrawPage() {
-  const { ready: loaded, state, withdraw } = useStore()
+  const { ready: loaded, state, withdraw, setCoins, syncWithServer } = useStore()
   const [amount, setAmount] = useState("")
   const [accountName, setAccountName] = useState("")
   const [accountNumber, setAccountNumber] = useState("")
@@ -289,19 +289,16 @@ export default function WithdrawPage() {
         throw new Error(data.error || "Withdrawal request failed")
       }
 
-      // Deduct locally in store
+      // Deduct immediately in store and synchronize
+      const nextRemaining = typeof data.remainingBalance === "number" ? data.remainingBalance : Math.max(0, available - amt)
+      setServerBalance(nextRemaining)
       try {
+        setCoins(nextRemaining)
         withdraw(amt, "bank")
       } catch {
-        // Ignored if local state syncs with server later
+        setCoins(nextRemaining)
       }
-
-      // Update local serverBalance state
-      if (typeof data.remainingBalance === "number") {
-        setServerBalance(data.remainingBalance)
-      } else {
-        setServerBalance(Math.max(0, available - amt))
-      }
+      syncWithServer().catch(() => {})
 
       const savedDetails = {
         accountName: accountName.trim(),

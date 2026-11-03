@@ -3,7 +3,7 @@ import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { AeropayService } from "@/lib/aeropay"
 import { creditOrderToUser, parseGameState } from "@/lib/order-credit"
-import { calculateAuthoritativeBalance } from "@/app/api/wallet/withdraw/route"
+import { getUserWalletSummary } from "@/lib/wallet-ledger"
 
 /**
  * GET /api/game/sync
@@ -187,9 +187,9 @@ export async function GET() {
 
     // 8. Ensure serverState.coins matches authoritative ledger balance (commissions + gift cards + recharges + claims - withdrawals)
     try {
-      const { availableBalance } = await calculateAuthoritativeBalance(uid)
-      if (Number(serverState.coins || 0) < availableBalance) {
-        serverState.coins = availableBalance
+      const summary = await getUserWalletSummary(uid)
+      if (Number(serverState.coins) !== summary.availableBalance) {
+        serverState.coins = summary.availableBalance
         stateModified = true
       }
     } catch (balErr) {
@@ -278,16 +278,14 @@ export async function POST(req: NextRequest) {
 
     const mergedHistory = [...preservedServerEntries, ...clientHistory]
 
-    // 5. Coins protection: Don't allow client to drop below server coins if server has referral earnings / gift cards
-    const serverCoins = Number(currentServerState.coins) || 0
-    const serverLifetime = Number(currentServerState.lifetime) || 0
-    const clientCoins = Number(state.coins) || 0
-    const clientLifetime = Number(state.lifetime) || 0
+    // 5. Authoritative Balance: Prevent client from inflating coins or overriding withdrawal deductions
+    const summary = await getUserWalletSummary(uid)
+    const authoritativeBalance = summary.availableBalance
 
     const sanitizedState = {
       ...state,
-      coins: Math.max(serverCoins, clientCoins),
-      lifetime: Math.max(serverLifetime, clientLifetime),
+      coins: authoritativeBalance,
+      lifetime: Math.max(Number(currentServerState.lifetime) || 0, Number(state.lifetime) || 0, summary.totalEarned),
       owned: sanitizedOwned,
       history: mergedHistory,
     }

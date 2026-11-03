@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
+import { getUserWalletSummary } from "@/lib/wallet-ledger"
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Withdrawal not found" }, { status: 404 })
     }
 
-    // Update withdrawal
+    // 1. Update withdrawal status in withdrawals table
     await db`
       UPDATE withdrawals
       SET status = ${status},
@@ -32,39 +33,43 @@ export async function POST(req: NextRequest) {
       WHERE id = ${id}
     `
 
-    // If rejecting and refund is enabled, refund coins to user's wallet
-    if (status === "REJECTED" && refundUser) {
-      const refundAmount = Number(withdrawal.amount) || 0
-      const [gameState] = await db`SELECT state FROM game_states WHERE user_id = ${withdrawal.user_id} LIMIT 1`
-      const state = gameState?.state || {}
-      const currentCoins = Number(state.coins || 0)
-      const newCoins = currentCoins + refundAmount
-      const now = Date.now()
+    // 2. Recalculate authoritative balance and synchronize game_states
+    const summary = await getUserWalletSummary(withdrawal.user_id)
+    const state = summary.state || {}
 
+    let updatedHistory = Array.isArray(state.history) ? state.history : []
+
+    // If rejecting, record refund event in history
+    if (status === "REJECTED") {
+      const refundAmount = Number(withdrawal.amount) || 0
+      const now = Date.now()
       const refundEntry = {
         id: `REF_${id}`,
         at: now,
         coins: refundAmount,
-        kind: "welcome",
-        note: `Refund for rejected withdrawal ${id}`,
+        kind: "refund",
+        note: `Withdrawal rejected${adminNote ? ": " + adminNote : ""}`,
       }
-
-      const updatedHistory = [refundEntry, ...(Array.isArray(state.history) ? state.history : [])]
-      const updatedState = {
-        ...state,
-        coins: newCoins,
-        history: updatedHistory,
-      }
-
-      await db`
-        UPDATE game_states
-        SET state = ${JSON.stringify(updatedState)}::jsonb,
-            updated_at = now()
-        WHERE user_id = ${withdrawal.user_id}
-      `
+      updatedHistory = [refundEntry, ...updatedHistory]
     }
 
-    return NextResponse.json({ success: true, id, status })
+    const updatedState = {
+      ...state,
+      coins: summary.availableBalance,
+      history: updatedHistory,
+    }
+
+    await db`
+      INSERT INTO game_states (user_id, state, updated_at)
+      VALUES (${withdrawal.user_id}, ${JSON.stringify(updatedState)}::jsonb, now())
+      ON CONFLICT (user_id) DO UPDATE
+      SET state = ${JSON.stringify(updatedState)}::jsonb,
+          updated_at = now()
+    `
+
+    console.log(`[WithdrawalStatus] Withdrawal ${id} updated to ${status}. User ${withdrawal.user_id} balance synchronized to ₹${summary.availableBalance}`)
+
+    return NextResponse.json({ success: true, id, status, availableBalance: summary.availableBalance })
   } catch (err) {
     console.error("[Withdrawal Status Update Error]:", err)
     return NextResponse.json({ error: "Failed to update withdrawal status" }, { status: 500 })

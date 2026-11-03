@@ -134,11 +134,11 @@ export async function syncWithServer() {
         }
       }
 
-      // 3. Sync coins and lifetime: Ensure referral commissions & gift cards on server are reflected in wallet
-      const srvCoins = Number(srv.coins) || 0
+      // 3. Sync coins and lifetime: Server ledger is authoritative for wallet balance
+      const srvCoins = Number(srv.coins)
       const srvLifetime = Number(srv.lifetime) || 0
 
-      if (srvCoins > nextState.coins) {
+      if (!isNaN(srvCoins) && nextState.coins !== srvCoins) {
         nextState.coins = srvCoins
         updated = true
       }
@@ -156,7 +156,7 @@ export async function syncWithServer() {
         nextState = {
           ...nextState,
           name: data.user?.name || srv.name || nextState.name,
-          coins: Math.max(srvCoins, nextState.coins),
+          coins: !isNaN(srvCoins) ? srvCoins : nextState.coins,
           lifetime: Math.max(srvLifetime, nextState.lifetime),
           streak: Math.max(Number(srv.streak) || 0, currentState.streak),
           bestStreak: Math.max(Number(srv.bestStreak) || 0, currentState.bestStreak),
@@ -230,6 +230,7 @@ const actions = {
   buy: (planId: PlanId) => commit((s, t) => game.buy(s, planId, t)),
   activatePlan: (planId: PlanId, orderId?: string) => commit((s, t) => game.activatePlan(s, planId, t, orderId)),
   withdraw: (amount: number, method = "bank") => commit((s, t) => game.withdraw(s, amount, t, method)),
+  setCoins: (coins: number) => commit((s) => ({ ...s, coins: Math.max(0, coins) })),
   creditWallet: (amount: number, code = "GIFT-CARD", entryId?: string) =>
     earn((s, t) => {
       const id = entryId || `GIFT_${Date.now()}`

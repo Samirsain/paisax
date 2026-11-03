@@ -3,82 +3,22 @@ import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { WITHDRAW_MIN, WITHDRAW_FEE_PCT, canWithdrawToday } from "@/lib/game"
 import { parseGameState } from "@/lib/order-credit"
+import { getUserWalletSummary } from "@/lib/wallet-ledger"
 import crypto from "crypto"
 
 /**
- * Calculates the user's authoritative withdrawable balance:
- * 1. Referral Commissions (from referral_commissions table)
- * 2. Gift Card Redemptions (from gift_card_redemptions table)
- * 3. Wallet Recharges (from orders table where plan_id = 'recharge' AND status = 'SUCCESS')
- * 4. Daily Claim & Check-in Rewards (from game_states history where kind IN ('claim', 'checkin', 'welcome'))
- * 5. Deducting all non-rejected withdrawals (status != 'REJECTED' in withdrawals table)
+ * Backward compatible wrapper over centralized getUserWalletSummary
  */
 export async function calculateAuthoritativeBalance(uid: string) {
-  // 1. Referral commissions earned
-  const [commRow] = await db`
-    SELECT COALESCE(SUM(commission_amount), 0) as total
-    FROM referral_commissions
-    WHERE recipient_id = ${uid}
-  `.catch(() => [{ total: 0 }])
-
-  // 2. Gift card redemptions
-  const [giftRow] = await db`
-    SELECT COALESCE(SUM(amount), 0) as total
-    FROM gift_card_redemptions
-    WHERE user_id = ${uid}
-  `.catch(() => [{ total: 0 }])
-
-  // 3. Wallet recharge deposits
-  const [rechRow] = await db`
-    SELECT COALESCE(SUM(amount), 0) as total
-    FROM orders
-    WHERE user_id = ${uid} AND plan_id = 'recharge' AND status = 'SUCCESS'
-  `.catch(() => [{ total: 0 }])
-
-  // 4. Existing non-rejected withdrawals
-  const [withRow] = await db`
-    SELECT COALESCE(SUM(amount), 0) as total
-    FROM withdrawals
-    WHERE user_id = ${uid} AND status != 'REJECTED'
-  `.catch(() => [{ total: 0 }])
-
-  // 5. Game state
-  const [gsRow] = await db`
-    SELECT state FROM game_states WHERE user_id = ${uid} LIMIT 1
-  `.catch(() => [undefined])
-
-  const state = parseGameState(gsRow?.state)
-
-  let claimTotal = 0
-  if (Array.isArray(state.history)) {
-    for (const h of state.history) {
-      if ((h.kind === "claim" || h.kind === "checkin" || h.kind === "welcome") && Number(h.coins) > 0) {
-        claimTotal += Number(h.coins)
-      }
-    }
-  }
-
-  const commTotal = Number(commRow?.total) || 0
-  const giftTotal = Number(giftRow?.total) || 0
-  const rechTotal = Number(rechRow?.total) || 0
-  const withTotal = Number(withRow?.total) || 0
-
-  // Total earned from all eligible sources
-  const totalEarned = commTotal + giftTotal + rechTotal + claimTotal
-  const stateCoins = Number(state.coins) || 0
-
-  // Effective balance is whichever is higher: computed ledger balance or current state coins
-  const calculatedBalance = totalEarned - withTotal
-  const availableBalance = Math.max(0, Math.max(calculatedBalance, stateCoins))
-
+  const summary = await getUserWalletSummary(uid)
   return {
-    availableBalance,
-    state,
-    commTotal,
-    giftTotal,
-    rechTotal,
-    claimTotal,
-    withTotal,
+    availableBalance: summary.availableBalance,
+    state: summary.state,
+    commTotal: summary.commTotal,
+    giftTotal: summary.giftTotal,
+    rechTotal: summary.rechTotal,
+    claimTotal: summary.gameEarned,
+    withTotal: summary.withdrawnTotal,
   }
 }
 
