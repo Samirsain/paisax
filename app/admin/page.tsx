@@ -834,6 +834,22 @@ export default function AdminPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => {
+                if (data?.users && data.users.length > 0) {
+                  openPlanModal(data.users[0])
+                } else {
+                  toast.error("No registered users found in database")
+                }
+              }}
+              title="Activate any solar plan for any user directly"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-3 py-2 text-xs font-black text-slate-950 shadow-md shadow-amber-500/20 hover:from-amber-400 hover:to-amber-500 transition-all active:scale-95 cursor-pointer"
+            >
+              <ZapIcon className="size-3.5 fill-slate-950" />
+              <span>Direct Plan Activate</span>
+            </button>
+
+            <button
+              type="button"
               onClick={loadData}
               disabled={loading}
               title="Refresh Data"
@@ -1242,11 +1258,11 @@ export default function AdminPage() {
                               <button
                                 type="button"
                                 onClick={() => openPlanModal(u)}
-                                title="Activate or Deactivate Plans"
-                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500/20 border border-amber-500/40 px-2 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-500/30 transition-all cursor-pointer"
+                                title="Activate or Deactivate Plans for this user"
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-2.5 py-1 text-[11px] font-extrabold text-amber-300 transition-all cursor-pointer whitespace-nowrap shadow-xs"
                               >
-                                <ZapIcon className="size-3" />
-                                <span>Plans</span>
+                                <ZapIcon className="size-3 fill-amber-300" />
+                                <span>Assign Plan</span>
                               </button>
                               <a
                                 href={`tel:${u.phone}`}
@@ -1335,9 +1351,22 @@ export default function AdminPage() {
                       </div>
 
                       <div className="mt-3 space-y-2">
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                          Purchased Solar Plans:
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Purchased Solar Plans:
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const fullUser = data?.users.find((fu) => fu.id === u.userId)
+                              if (fullUser) openPlanModal(fullUser)
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold text-amber-300 transition-all cursor-pointer"
+                          >
+                            <PlusIcon className="size-3" />
+                            <span>Assign Plan</span>
+                          </button>
+                        </div>
                         {u.ownedPlans?.length > 0 ? (
                           u.ownedPlans.map((p, idx) => (
                             <div
@@ -2865,6 +2894,30 @@ export default function AdminPage() {
               >
                 ✕
               </button>
+            </div>
+
+            {/* Target User Switcher (Allows admin to pick ANY user, free or paid) */}
+            <div className="mt-3.5 pb-3.5 border-b border-slate-800">
+              <label className="text-[11px] font-bold text-slate-400 block mb-1.5 flex items-center justify-between">
+                <span>Select Target User:</span>
+                <span className="text-[10px] text-amber-400 font-mono">
+                  {data?.users?.length || 0} Total Users in Database
+                </span>
+              </label>
+              <select
+                value={selectedPlanUser.id}
+                onChange={(e) => {
+                  const found = data?.users.find((u) => u.id === e.target.value)
+                  if (found) setSelectedPlanUser(found)
+                }}
+                className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-amber-500 cursor-pointer"
+              >
+                {data?.users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || "Player"} — {u.phone} ({u.hasPaidPlan ? `Paid: ${u.paidPlansCount} Plans` : "Free User (₹0)"})
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Current Owned Plans */}

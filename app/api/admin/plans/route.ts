@@ -3,6 +3,7 @@ import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { getPlan, PLANS, type PlanId, type Owned } from "@/lib/game"
 import { parseGameState } from "@/lib/order-credit"
+import crypto from "crypto"
 
 /**
  * Admin Plan Management API
@@ -53,10 +54,11 @@ export async function POST(req: NextRequest) {
     }
 
     const now = Date.now()
-    const newPlanId = `admin_plan_${planId}_${now}_${Math.random().toString(36).slice(2, 6)}`
+    const rand = crypto.randomBytes(3).toString("hex").toUpperCase()
+    const orderId = `ORD_ADM_${now}_${rand}`
 
     const newOwnedPlan: Owned = {
-      id: newPlanId,
+      id: orderId,
       planId: planId as PlanId,
       claimed: 0,
       boughtAt: now,
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     // Add history log
     state.history.unshift({
-      id: `admin_act_${now}`,
+      id: `BUY_${orderId}`,
       at: now,
       coins: 0,
       kind: "buy",
@@ -85,19 +87,19 @@ export async function POST(req: NextRequest) {
           updated_at = now()
     `
 
-    // Also record an order in orders table for auditability
-    const orderId = `ADMIN_ORD_${now}`
+    // Also record an order in orders table for auditability and persistent recovery
     await db`
       INSERT INTO orders (
-        id, user_id, plan_id, amount, status, txn_id, credited_to_wallet, created_at
+        id, user_id, plan_id, amount, status, txn_id, credited_to_wallet, created_at, updated_at
       ) VALUES (
         ${orderId},
         ${userId},
         ${planId},
         ${planConfig.cost},
         'SUCCESS',
-        ${'ADMIN_ACTIVATED'},
+        'ADMIN_ACTIVATED',
         true,
+        now(),
         now()
       )
     `.catch((err) => {
