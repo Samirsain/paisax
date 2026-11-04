@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import {
   ArrowRightIcon,
   ChevronRightIcon,
@@ -66,6 +67,8 @@ interface ReferralApiResponse {
   totalActiveMembers: number
   totalTeamRecharge: number
   totalCommission: number
+  referralAvailableBalance?: number
+  referralWithdrawn?: number
   paidCommission: number
   pendingCommission: number
   levels: LevelData[]
@@ -265,6 +268,32 @@ export default function ReferPage() {
           </div>
 
         </div>
+      </div>
+
+      {/* ── REFERRAL BALANCE & WITHDRAW CARD ───────────────────────────── */}
+      <div className="rounded-[24px] bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 p-4 text-white shadow-lg flex items-center justify-between border border-emerald-400/40">
+        <div>
+          <p className="text-[11px] font-bold text-emerald-100 flex items-center gap-1.5">
+            <WalletIcon className="size-3.5 text-emerald-200" />
+            <span>Available Referral Earnings</span>
+          </p>
+          <p className="text-2xl font-black text-white mt-0.5">
+            ₹{fmt(data?.referralAvailableBalance ?? 0)}
+          </p>
+          {Boolean(data?.referralWithdrawn) && (
+            <p className="text-[10px] text-emerald-200 mt-0.5 font-medium">
+              Total Withdrawn: ₹{fmt(data?.referralWithdrawn ?? 0)}
+            </p>
+          )}
+        </div>
+
+        <Link
+          href="/wallet/withdraw?type=referral"
+          className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-xs font-black text-emerald-800 shadow-md hover:bg-emerald-50 active:scale-95 transition-all shrink-0"
+        >
+          <span>Withdraw Now</span>
+          <ArrowRightIcon className="size-3.5" />
+        </Link>
       </div>
 
       {/* ── REFERRAL LINK & QUICK SHARE CARD ───────────────────────────── */}

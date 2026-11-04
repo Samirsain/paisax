@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
         at: now,
         coins: refundAmount,
         kind: "refund",
+        balanceType: withdrawal.balance_type || "main",
         note: `Withdrawal rejected${adminNote ? ": " + adminNote : ""}`,
       }
       updatedHistory = [refundEntry, ...updatedHistory]

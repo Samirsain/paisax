@@ -143,10 +143,14 @@ export async function GET(req: NextRequest) {
     // Precompute authoritative wallet summary for all users (with fallback)
     let userSummaryMap = new Map<string, import("@/lib/wallet-ledger").UserWalletSummary>()
     let totalWalletBalance = 0
+    let totalMainBalance = 0
+    let totalReferralBalance = 0
     try {
       const walletResult = await getAllUsersWalletSummary()
       userSummaryMap = walletResult.userSummaryMap
       totalWalletBalance = walletResult.totalWalletBalance
+      totalMainBalance = walletResult.totalMainBalance
+      totalReferralBalance = walletResult.totalReferralBalance
     } catch (err) {
       console.error("[Admin] Wallet summary failed, falling back to state.coins:", err)
     }
@@ -223,6 +227,8 @@ export async function GET(req: NextRequest) {
         totalCommissionEarned,
         createdAt: u.created_at,
         coins: userCoins,
+        mainBalance: walletSummary?.mainAvailableBalance ?? userCoins,
+        referralBalance: walletSummary?.referralAvailableBalance ?? 0,
         lifetime: walletSummary ? Math.max(Number(state.lifetime ?? 0), walletSummary.totalEarned) : Number(state.lifetime ?? 0),
         hasPaidPlan: hasPaid,
         paidPlansCount: paidOwned.length || successfulOrders.length,
@@ -329,6 +335,8 @@ export async function GET(req: NextRequest) {
         totalUsers,
         paidUsersCount,
         totalWalletBalance,
+        totalMainBalance,
+        totalReferralBalance,
         totalDeposits,
         totalDepositsCount,
         totalOrdersCount: ordersRows.length,
@@ -367,6 +375,7 @@ export async function GET(req: NextRequest) {
         fee: Number(w.fee) || 0,
         netAmount: Number(w.net_amount) || 0,
         status: w.status,
+        balanceType: w.balance_type || "main",
         utr: w.utr,
         adminNote: w.admin_note,
         createdAt: w.created_at,

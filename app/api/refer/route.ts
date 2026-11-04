@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
+import { getUserWalletSummary } from "@/lib/wallet-ledger"
 
 function maskPhone(phone: string | null | undefined): string {
   if (!phone || phone.length < 10) return "User"
@@ -151,12 +152,18 @@ export async function GET(req: NextRequest) {
     const l3Comm = commByLevel.get(3) || 0
     const totalCommission = l1Comm + l2Comm + l3Comm
 
+    const walletSummary = await getUserWalletSummary(uid).catch(() => null)
+    const referralAvailableBalance = walletSummary ? walletSummary.referralAvailableBalance : 0
+    const referralWithdrawn = walletSummary ? (walletSummary.referralApprovedWithdrawn + walletSummary.referralPendingWithdrawn) : 0
+
     return NextResponse.json({
       inviteCode,
       totalTeamMembers,
       totalActiveMembers,
       totalTeamRecharge,
       totalCommission,
+      referralAvailableBalance,
+      referralWithdrawn,
       paidCommission: totalCommission,
       pendingCommission: 0,
       levels: [

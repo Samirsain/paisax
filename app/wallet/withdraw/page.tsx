@@ -21,6 +21,7 @@ import {
   RotateCcwIcon,
   CreditCardIcon,
   SparklesIcon,
+  UsersIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
@@ -46,6 +47,9 @@ const INDIAN_PAYOUTS_POOL = [
 
 export default function WithdrawPage() {
   const { ready: loaded, state, withdraw, setCoins, syncWithServer } = useStore()
+  const [balanceType, setBalanceType] = useState<"main" | "referral">("main")
+  const [mainBalance, setMainBalance] = useState<number>(0)
+  const [referralBalance, setReferralBalance] = useState<number>(0)
   const [amount, setAmount] = useState("")
   const [accountName, setAccountName] = useState("")
   const [accountNumber, setAccountNumber] = useState("")
@@ -75,12 +79,23 @@ export default function WithdrawPage() {
     netPayout: number
     accountNumber: string
     ifsc: string
+    balanceType?: string
   } | null>(null)
   const [payouts, setPayouts] = useState(INDIAN_PAYOUTS_POOL.slice(0, 5))
   const [pulseIdx, setPulseIdx] = useState<number | null>(null)
 
   // 1. Load saved bank details on mount (localStorage + server DB)
   useEffect(() => {
+    // Check if ?type=referral is present
+    if (typeof window !== "undefined") {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get("type") === "referral") {
+          setBalanceType("referral")
+        }
+      } catch {}
+    }
+
     // Instant cache load
     try {
       const cached = localStorage.getItem("paisax_saved_bank")
@@ -104,6 +119,12 @@ export default function WithdrawPage() {
     fetch("/api/wallet/withdraw")
       .then((res) => res.json())
       .then((data) => {
+        if (typeof data?.mainAvailableBalance === "number") {
+          setMainBalance(data.mainAvailableBalance)
+        }
+        if (typeof data?.referralAvailableBalance === "number") {
+          setReferralBalance(data.referralAvailableBalance)
+        }
         if (typeof data?.availableBalance === "number") {
           setServerBalance(data.availableBalance)
         }
@@ -145,8 +166,8 @@ export default function WithdrawPage() {
 
   const today = canWithdrawToday()
   const dayName = new Date().toLocaleDateString("en-IN", { weekday: "long" })
-  const coins = typeof serverBalance === "number" ? serverBalance : state.coins
-  const available = Math.max(0, coins)
+  const mainWalletCoins = typeof serverBalance === "number" ? serverBalance : (mainBalance || state.coins)
+  const available = Math.max(0, balanceType === "main" ? mainWalletCoins : referralBalance)
   const amt = parseInt(amount, 10) || 0
   const fee = Math.round((amt * WITHDRAW_FEE_PCT) / 100)
   const netPayout = Math.max(0, amt - fee)
@@ -280,6 +301,7 @@ export default function WithdrawPage() {
           accountNumber: accountNumber.trim(),
           bankName: bankName.trim(),
           ifsc: ifsc.trim().toUpperCase(),
+          balanceType,
         }),
       })
 
@@ -291,8 +313,13 @@ export default function WithdrawPage() {
 
       // Deduct immediately in store and synchronize
       const nextRemaining = typeof data.remainingBalance === "number" ? data.remainingBalance : Math.max(0, available - amt)
-      setServerBalance(nextRemaining)
-      setCoins(nextRemaining)
+      if (balanceType === "main") {
+        setMainBalance(nextRemaining)
+        setServerBalance(nextRemaining)
+        setCoins(nextRemaining)
+      } else {
+        setReferralBalance(nextRemaining)
+      }
       syncWithServer().catch(() => {})
 
       const savedDetails = {
@@ -309,6 +336,7 @@ export default function WithdrawPage() {
         netPayout,
         accountNumber: accountNumber.trim(),
         ifsc: ifsc.trim().toUpperCase(),
+        balanceType,
       })
 
       // Permanently remember saved bank details
@@ -344,10 +372,50 @@ export default function WithdrawPage() {
         </h1>
 
         <div className="mt-3">
-          <p className="text-xs font-semibold text-amber-100">Available Balance</p>
+          <p className="text-xs font-semibold text-amber-100">
+            {balanceType === "main" ? "Available Main Wallet Balance" : "Available Referral Earnings"}
+          </p>
           <p className="mt-1 text-4xl font-black text-white tracking-tight drop-shadow-sm">
             ₹{fmt(available)}
           </p>
+        </div>
+
+        {/* ── Balance Switcher Tabs ──────────────────────────────── */}
+        <div className="mt-4 flex items-center justify-center p-1 bg-black/30 backdrop-blur-md rounded-2xl border border-white/20 max-w-[320px] mx-auto gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setBalanceType("main")
+              setAmount("")
+              setError("")
+            }}
+            className={cn(
+              "flex-1 py-1.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5",
+              balanceType === "main"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-amber-100 hover:text-white"
+            )}
+          >
+            <WalletIcon className="size-3.5" />
+            <span>Main (₹{fmt(mainWalletCoins)})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBalanceType("referral")
+              setAmount("")
+              setError("")
+            }}
+            className={cn(
+              "flex-1 py-1.5 px-3 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5",
+              balanceType === "referral"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-amber-100 hover:text-white"
+            )}
+          >
+            <UsersIcon className="size-3.5" />
+            <span>Referral (₹{fmt(referralBalance)})</span>
+          </button>
         </div>
 
         <div className="mt-4 flex items-center justify-center gap-2">
@@ -401,6 +469,10 @@ export default function WithdrawPage() {
             <div className="flex justify-between py-1.5">
               <span className="text-slate-500">Requested Amount</span>
               <span className="font-bold text-slate-900">₹{fmt(withdrawalInfo?.amount || amt)}</span>
+            </div>
+            <div className="flex justify-between py-1.5">
+              <span className="text-slate-500">Source Balance</span>
+              <span className="font-bold text-slate-800 capitalize">{withdrawalInfo?.balanceType || balanceType} Wallet</span>
             </div>
             <div className="flex justify-between py-1.5">
               <span className="text-slate-500">Service Fee ({WITHDRAW_FEE_PCT}%)</span>

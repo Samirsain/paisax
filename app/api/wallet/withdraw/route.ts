@@ -2,27 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
 import { WITHDRAW_MIN, WITHDRAW_FEE_PCT, canWithdrawToday } from "@/lib/game"
-import { parseGameState } from "@/lib/order-credit"
 import { getUserWalletSummary } from "@/lib/wallet-ledger"
 import crypto from "crypto"
 
-/**
- * Backward compatible wrapper over centralized getUserWalletSummary
- */
-export async function calculateAuthoritativeBalance(uid: string) {
-  const summary = await getUserWalletSummary(uid)
-  return {
-    availableBalance: summary.availableBalance,
-    state: summary.state,
-    commTotal: summary.commTotal,
-    giftTotal: summary.giftTotal,
-    rechTotal: summary.rechTotal,
-    claimTotal: summary.gameEarned,
-    withTotal: summary.withdrawnTotal,
-  }
-}
-
-// GET: Fetch user's saved bank account details and authoritative available balance
+// GET: Fetch user's saved bank account details and authoritative balances
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies()
@@ -80,12 +63,12 @@ export async function GET(req: NextRequest) {
 
     const hasSavedBank = Boolean(accountNumber && accountNumber.trim().length >= 6)
 
-    // Calculate authoritative available balance (including referral, rewards, gift cards)
-    const { availableBalance, state } = await calculateAuthoritativeBalance(uid)
+    // Authoritative ledger summary (separate Main Wallet vs Referral Earnings)
+    const summary = await getUserWalletSummary(uid)
 
     // Synchronize game_states if different so entire app remains consistent
-    if (Number(state.coins) !== availableBalance) {
-      const updatedState = { ...state, coins: availableBalance }
+    if (Number(summary.state.coins) !== summary.availableBalance) {
+      const updatedState = { ...summary.state, coins: summary.availableBalance }
       await db`
         INSERT INTO game_states (user_id, state, updated_at)
         VALUES (${uid}, ${JSON.stringify(updatedState)}::jsonb, now())
@@ -98,8 +81,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       hasSavedBank,
-      availableBalance,
-      coins: availableBalance,
+      // Main wallet
+      mainAvailableBalance: summary.mainAvailableBalance,
+      mainTotalEarned: summary.mainTotalEarned,
+      mainPendingWithdrawn: summary.mainPendingWithdrawn,
+      mainApprovedWithdrawn: summary.mainApprovedWithdrawn,
+
+      // Referral wallet
+      referralAvailableBalance: summary.referralAvailableBalance,
+      referralTotalEarned: summary.referralTotalEarned,
+      referralPendingWithdrawn: summary.referralPendingWithdrawn,
+      referralApprovedWithdrawn: summary.referralApprovedWithdrawn,
+
+      // Combined
+      availableBalance: summary.availableBalance,
+      coins: summary.availableBalance,
+
       bankDetails: hasSavedBank
         ? {
             accountName: accountName || user.name || "",
@@ -175,7 +172,14 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}))
-    const { amount: rawAmount, accountName, accountNumber, ifsc, bankName } = body
+    const {
+      amount: rawAmount,
+      accountName,
+      accountNumber,
+      ifsc,
+      bankName,
+      balanceType = "main", // "main" | "referral"
+    } = body
 
     const amount = parseInt(rawAmount, 10)
     if (isNaN(amount) || amount < WITHDRAW_MIN) {
@@ -211,12 +215,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Calculate authoritative available balance (all referral earnings, rewards, gift cards are eligible)
-    const { availableBalance, state } = await calculateAuthoritativeBalance(uid)
+    // Authoritative balance check based on chosen balanceType
+    const summary = await getUserWalletSummary(uid)
+    const availableForType =
+      balanceType === "referral"
+        ? summary.referralAvailableBalance
+        : summary.mainAvailableBalance
 
-    if (amount > availableBalance) {
+    if (amount > availableForType) {
+      const walletLabel = balanceType === "referral" ? "Referral Earnings" : "Main Wallet"
       return NextResponse.json(
-        { error: `Withdrawal amount exceeds your available balance (₹${availableBalance})` },
+        {
+          error: `Withdrawal amount (₹${amount}) exceeds your available ${walletLabel} balance (₹${availableForType})`,
+          availableBalance: availableForType,
+          balanceType,
+        },
         { status: 400 }
       )
     }
@@ -226,7 +239,7 @@ export async function POST(req: NextRequest) {
     const withdrawId = `W_${Date.now()}_${crypto.randomBytes(3).toString("hex").toUpperCase()}`
 
     // Deduct coins & update game state
-    const nextCoins = Math.max(0, availableBalance - amount)
+    const nextTotalCoins = Math.max(0, summary.availableBalance - amount)
     const now = Date.now()
     const historyEntry = {
       id: withdrawId,
@@ -235,28 +248,30 @@ export async function POST(req: NextRequest) {
       kind: "withdraw",
       amount,
       method: "bank",
+      balanceType,
       accountName: accountName.trim(),
       accountNumber: accountNumber.trim(),
       ifsc: ifsc.trim().toUpperCase(),
       bankName: bankName?.trim() || "",
     }
 
+    const state = summary.state || {}
     const nextHistory = [historyEntry, ...(Array.isArray(state.history) ? state.history : [])]
     const updatedState = {
       ...state,
-      coins: nextCoins,
+      coins: nextTotalCoins,
       history: nextHistory,
     }
 
-    // 1. Save to withdrawals table
+    // 1. Save to withdrawals table with balance_type
     await db`
       INSERT INTO withdrawals (
         id, user_id, account_name, account_number, bank_name, ifsc_code,
-        amount, fee, net_amount, status, created_at, updated_at
+        amount, fee, net_amount, status, balance_type, created_at, updated_at
       ) VALUES (
         ${withdrawId}, ${uid}, ${accountName.trim()}, ${accountNumber.trim()},
         ${bankName?.trim() || null}, ${ifsc.trim().toUpperCase()},
-        ${amount}, ${fee}, ${netAmount}, 'PENDING', now(), now()
+        ${amount}, ${fee}, ${netAmount}, 'PENDING', ${balanceType}, now(), now()
       )
     `
 
@@ -280,7 +295,9 @@ export async function POST(req: NextRequest) {
           updated_at = now()
     `
 
-    console.log(`[Withdrawal] Success: user ${uid} requested ₹${amount} (Net: ₹${netAmount}), Remaining balance: ₹${nextCoins}`)
+    console.log(
+      `[Withdrawal] Success: user ${uid} requested ₹${amount} (${balanceType} balance). Remaining total balance: ₹${nextTotalCoins}`
+    )
 
     return NextResponse.json({
       success: true,
@@ -290,6 +307,7 @@ export async function POST(req: NextRequest) {
         fee,
         netAmount,
         status: "PENDING",
+        balanceType,
         accountNumber: accountNumber.trim(),
         ifsc: ifsc.trim().toUpperCase(),
       },
@@ -299,7 +317,8 @@ export async function POST(req: NextRequest) {
         bankName: bankName?.trim() || "",
         ifsc: ifsc.trim().toUpperCase(),
       },
-      remainingBalance: nextCoins,
+      remainingBalance: nextTotalCoins,
+      remainingTypeBalance: Math.max(0, availableForType - amount),
     })
   } catch (err) {
     console.error("[Withdrawal Error]:", err)

@@ -3,20 +3,32 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import Image from "next/image"
-import { CheckCircle2Icon, ClipboardCheckIcon, HouseIcon, Loader2Icon, ShieldCheckIcon, SparklesIcon, ZapIcon } from "lucide-react"
+import {
+  CheckCircle2Icon,
+  ClipboardCheckIcon,
+  HouseIcon,
+  Loader2Icon,
+  ShieldCheckIcon,
+  SparklesIcon,
+  WalletIcon,
+  ZapIcon,
+  CreditCardIcon,
+} from "lucide-react"
+import { toast } from "sonner"
 import { CoinBurst } from "@/components/coin-lottie"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { getPlan, type PlanId } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 
-/** Confirm, then redirect to AeroPay payment gateway or activate directly. */
+/** Confirm, then purchase via Wallet balance or AeroPay online payment. */
 export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: () => void }) {
-  const { state, activatePlan } = useStore()
+  const { state, syncWithServer } = useStore()
   const router = useRouter()
   const [shown, setShown] = useState(planId)
   const [done, setDone] = useState(false)
-  const [paying, setPaying] = useState(false)
+  const [payingWallet, setPayingWallet] = useState(false)
+  const [payingGateway, setPayingGateway] = useState(false)
   const [payError, setPayError] = useState("")
 
   if (planId && planId !== shown) {
@@ -28,60 +40,106 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
 
   const plan = getPlan(shown)
   const alreadyHasFree = shown === "free" && state.owned.some((o) => o.planId === "free")
-  const go = (href: string) => { onClose(); router.push(href) }
+  const walletBalance = Number(state.coins) || 0
+  const canAffordWithWallet = walletBalance >= plan.cost
 
-  // Direct activation for Free plan only
-  function handleDirectActivate() {
+  const go = (href: string) => {
+    onClose()
+    router.push(href)
+  }
+
+  // 1. Direct activation for Free plan
+  async function handleDirectActivate() {
     if (alreadyHasFree) {
       setPayError("Free plan can only be claimed once per user.")
       return
     }
+    setPayingWallet(true)
+    setPayError("")
     try {
-      activatePlan(shown!)
+      const res = await fetch("/api/plans/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: "free", paymentMethod: "wallet" }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to activate free plan")
+      }
+      await syncWithServer()
       setDone(true)
+      toast.success("Free Solar Trial Plan is now active!")
     } catch (err: unknown) {
       setPayError(err instanceof Error ? err.message : "Failed to activate plan")
+    } finally {
+      setPayingWallet(false)
     }
   }
 
-  // AeroPay payment gateway (Paid plans must be purchased via AeroPay)
-  async function handlePayGateway() {
-    setPaying(true)
+  // 2. Pay using Wallet Balance
+  async function handlePayWallet() {
+    setPayingWallet(true)
     setPayError("")
-
-    if (plan.cost === 0) {
-      handleDirectActivate()
-      setPaying(false)
-      return
-    }
-
     try {
-      const res = await fetch("/api/payment/create-order", {
+      const res = await fetch("/api/plans/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: shown }),
+        body: JSON.stringify({ planId: shown, paymentMethod: "wallet" }),
+      })
+      const data = await res.json()
+
+      if (res.status === 401) {
+        setPayError("Please login to proceed with purchase.")
+        router.push("/login")
+        return
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to purchase plan with wallet balance")
+      }
+
+      await syncWithServer()
+      setDone(true)
+      toast.success(`🎉 ${plan.name} purchased successfully using wallet balance!`)
+    } catch (err: unknown) {
+      setPayError(err instanceof Error ? err.message : "Wallet payment failed")
+    } finally {
+      setPayingWallet(false)
+    }
+  }
+
+  // 3. Pay via AeroPay Online Gateway
+  async function handlePayGateway() {
+    setPayingGateway(true)
+    setPayError("")
+    try {
+      const res = await fetch("/api/plans/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: shown, paymentMethod: "gateway" }),
       })
       const data = await res.json()
 
       if (res.status === 401) {
         setPayError("Please login to proceed with payment.")
-        setPaying(false)
         router.push("/login")
         return
       }
 
       if (!res.ok || !data.paymentUrl) {
         setPayError(data.error ?? "Failed to initiate payment. Please try again.")
-        setPaying(false)
         return
       }
 
       window.location.href = data.paymentUrl
     } catch {
       setPayError("Network error. Please try again.")
-      setPaying(false)
+    } finally {
+      setPayingGateway(false)
     }
   }
+
+  const isBusy = payingWallet || payingGateway
 
   return (
     <Dialog open={planId !== null} onOpenChange={(open) => !open && onClose()}>
@@ -185,37 +243,70 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
               </dl>
             </div>
 
-            {/* Gateway notice */}
-            <div className="flex items-center gap-2.5 rounded-xl bg-amber-50 px-3.5 py-2 text-xs text-amber-900 border border-amber-200">
-              <ShieldCheckIcon className="size-4 shrink-0 text-amber-600" />
-              <span>Instant activation & secure payment via <strong>AeroPay UPI</strong></span>
-            </div>
+            {/* Current Wallet Balance Pill */}
+            {plan.cost > 0 && (
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3.5 py-2 text-xs border border-slate-200">
+                <span className="flex items-center gap-1.5 font-bold text-slate-600">
+                  <WalletIcon className="size-4 text-amber-600" />
+                  Your Available Wallet:
+                </span>
+                <span className="font-black text-slate-900 text-sm">
+                  ₹{fmt(walletBalance)}
+                </span>
+              </div>
+            )}
 
             {payError && (
-              <p role="alert" className="rounded-xl bg-red-50 p-2.5 text-xs text-red-600 border border-red-200">
+              <p role="alert" className="rounded-xl bg-red-50 p-2.5 text-xs text-red-600 border border-red-200 font-semibold">
                 {payError}
               </p>
             )}
 
-            {/* Purchase CTA Buttons - ALWAYS ACTIVE */}
+            {/* Purchase CTA Buttons */}
             <div className="grid gap-2.5 pt-1">
               
-              {/* Primary AeroPay Payment Button */}
+              {/* Option 1: Pay using Wallet Balance (if plan has cost > 0 and user can afford it) */}
+              {plan.cost > 0 && canAffordWithWallet && (
+                <Button
+                  variant="buy"
+                  size="xl"
+                  disabled={isBusy}
+                  onClick={handlePayWallet}
+                  className="w-full rounded-full bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 py-3.5 text-white font-black shadow-lg shadow-emerald-500/25 hover:opacity-95 active:scale-[0.99] cursor-pointer"
+                >
+                  {payingWallet ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2Icon className="size-4.5 animate-spin" />
+                      Activating Plan via Wallet…
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <WalletIcon className="size-4.5" />
+                      Pay ₹{fmt(plan.cost)} from Wallet Balance
+                    </span>
+                  )}
+                </Button>
+              )}
+
+              {/* Option 2: Pay via Online AeroPay UPI */}
               {plan.cost > 0 && (
                 <Button
                   variant="buy"
                   size="xl"
-                  disabled={paying}
+                  disabled={isBusy}
                   onClick={handlePayGateway}
                   className="w-full rounded-full bg-gradient-to-r from-[#eab308] via-[#f59e0b] to-[#d97706] py-3.5 text-slate-950 font-black shadow-lg shadow-amber-500/25 hover:opacity-95 active:scale-[0.99] cursor-pointer"
                 >
-                  {paying ? (
+                  {payingGateway ? (
                     <span className="flex items-center gap-2">
                       <Loader2Icon className="size-4.5 animate-spin" />
                       Redirecting to Payment…
                     </span>
                   ) : (
-                    <span>Pay ₹{fmt(plan.cost)} via UPI / AeroPay</span>
+                    <span className="flex items-center gap-2">
+                      <CreditCardIcon className="size-4.5" />
+                      Pay ₹{fmt(plan.cost)} via UPI / AeroPay
+                    </span>
                   )}
                 </Button>
               )}
@@ -235,12 +326,18 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
                   <Button
                     variant="buy"
                     size="xl"
-                    disabled={paying}
+                    disabled={isBusy}
                     onClick={handleDirectActivate}
                     className="w-full rounded-full bg-gradient-to-r from-[#eab308] via-[#f59e0b] to-[#d97706] py-3.5 text-slate-950 font-black shadow-lg shadow-amber-500/25 hover:opacity-95 active:scale-[0.99] cursor-pointer"
                   >
-                    <SparklesIcon className="size-4.5 text-slate-950" />
-                    Activate Free Plan
+                    {payingWallet ? (
+                      <Loader2Icon className="size-4.5 animate-spin text-slate-950" />
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <SparklesIcon className="size-4.5 text-slate-950" />
+                        Activate Free Plan
+                      </span>
+                    )}
                   </Button>
                 )
               )}
@@ -249,7 +346,7 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                disabled={paying}
+                disabled={isBusy}
                 className="text-slate-500 hover:text-slate-800"
               >
                 Cancel

@@ -58,6 +58,15 @@ export async function GET() {
       LIMIT 100
     `.catch(() => [])
 
+    // 5. Fetch admin adjustments
+    const adjustments = await db`
+      SELECT id, amount, adjustment_type, reason, created_at
+      FROM wallet_adjustments
+      WHERE user_id = ${uid}
+      ORDER BY created_at DESC
+      LIMIT 100
+    `.catch(() => [])
+
     // Normalize all records into a unified list
     const list: Array<{
       id: string
@@ -76,11 +85,16 @@ export async function GET() {
     // Map orders
     for (const o of orders) {
       const isRecharge = o.plan_id === "recharge"
+      const isWalletBuy = o.txn_id === "WALLET_BALANCE"
       const status = (o.status || "PENDING").toUpperCase() as any
       list.push({
         id: o.id,
-        type: "deposit",
-        title: isRecharge ? "Wallet Recharge (UPI)" : `Plan Purchase · ${o.plan_id}`,
+        type: isWalletBuy ? "withdrawal" : "deposit",
+        title: isRecharge
+          ? "Wallet Recharge (UPI)"
+          : isWalletBuy
+          ? `Plan Activated (Wallet) · ${o.plan_id}`
+          : `Plan Purchase (Online) · ${o.plan_id}`,
         amount: Number(o.amount) || 0,
         status: status === "SUCCESS" ? "SUCCESS" : status === "FAILED" ? "FAILED" : "PENDING",
         date: o.created_at,
@@ -144,6 +158,21 @@ export async function GET() {
         date: g.redeemed_at,
         timestamp: new Date(g.redeemed_at).getTime(),
         reference: g.code,
+      })
+    }
+
+    // Map admin adjustments
+    for (const a of adjustments) {
+      const isCredit = a.adjustment_type === "credit"
+      list.push({
+        id: a.id,
+        type: isCredit ? "deposit" : "withdrawal",
+        title: `Admin Adjustment: ${a.reason || (isCredit ? "Wallet Credit" : "Wallet Debit")}`,
+        amount: Math.abs(Number(a.amount) || 0),
+        status: "SUCCESS",
+        date: a.created_at,
+        timestamp: new Date(a.created_at).getTime(),
+        reference: a.id,
       })
     }
 

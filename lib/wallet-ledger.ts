@@ -3,16 +3,35 @@ import { parseGameState } from "@/lib/order-credit"
 
 export interface UserWalletSummary {
   userId: string
+  // Main wallet
+  mainAvailableBalance: number
+  mainTotalEarned: number
+  rechTotal: number
+  giftTotal: number
+  gameEarned: number
+  walletPlanPurchasesTotal: number
+  mainWithdrawnTotal: number
+  mainPendingWithdrawn: number
+  mainApprovedWithdrawn: number
+  mainRejectedWithdrawn: number
+
+  // Referral wallet
+  referralAvailableBalance: number
+  referralTotalEarned: number
+  commTotal: number
+  referralWithdrawnTotal: number
+  referralPendingWithdrawn: number
+  referralApprovedWithdrawn: number
+  referralRejectedWithdrawn: number
+
+  // Combined totals
   availableBalance: number
   totalEarned: number
-  commTotal: number
-  giftTotal: number
-  rechTotal: number
-  gameEarned: number
   withdrawnTotal: number
   pendingWithdrawn: number
   approvedWithdrawn: number
   rejectedWithdrawn: number
+
   state: Record<string, any>
 }
 
@@ -20,16 +39,24 @@ export interface UserWalletSummary {
  * Calculates authoritative wallet ledger balance for a single user.
  * 
  * Rules:
- * - Credits:
- *   1. Referral commissions with status = 'PAID'
- *   2. Gift card redemptions
- *   3. Wallet recharge deposits (orders with plan_id = 'recharge' AND status = 'SUCCESS')
- *   4. Daily solar claims, check-ins, welcomes, and invites from game_states history
- * - Deductions:
- *   All non-rejected withdrawals (status != 'REJECTED'):
- *   - 'PENDING' withdrawals reserve/deduct the funds immediately.
- *   - 'APPROVED' / 'PAID' withdrawals permanently deduct the funds.
- *   - 'REJECTED' withdrawals are excluded from deductions (automatically restoring the funds).
+ * - Main Wallet:
+ *   Credits:
+ *     1. Wallet recharge deposits (orders with plan_id = 'recharge' AND status = 'SUCCESS')
+ *     2. Gift card redemptions
+ *     3. Daily solar claims, check-ins, welcomes from game_states history
+ *     4. Positive admin adjustments (balance_type = 'main')
+ *   Debits:
+ *     1. Non-rejected main withdrawals (balance_type = 'main' AND status != 'REJECTED')
+ *     2. Plan purchases paid using wallet balance (orders with status = 'SUCCESS' AND txn_id = 'WALLET_BALANCE')
+ *     3. Negative admin adjustments (balance_type = 'main')
+ * 
+ * - Referral Wallet:
+ *   Credits:
+ *     1. Referral commissions with status = 'PAID'
+ *     2. Positive admin adjustments (balance_type = 'referral')
+ *   Debits:
+ *     1. Non-rejected referral withdrawals (balance_type = 'referral' AND status != 'REJECTED')
+ *     2. Negative admin adjustments (balance_type = 'referral')
  */
 export async function getUserWalletSummary(userId: string): Promise<UserWalletSummary> {
   // 1. Referral Commissions (paid)
@@ -53,33 +80,66 @@ export async function getUserWalletSummary(userId: string): Promise<UserWalletSu
     WHERE user_id = ${userId} AND plan_id = 'recharge' AND status = 'SUCCESS'
   `.catch(() => [{ total: 0 }])
 
-  // 4. Withdrawals breakdown
+  // 4. Plan Purchases paid via Wallet Balance (Debits)
+  const [walletBuysRow] = await db`
+    SELECT COALESCE(SUM(amount), 0) as total
+    FROM orders
+    WHERE user_id = ${userId} 
+      AND plan_id != 'recharge' 
+      AND status = 'SUCCESS' 
+      AND txn_id = 'WALLET_BALANCE'
+  `.catch(() => [{ total: 0 }])
+
+  // 5. Withdrawals breakdown grouped by balance_type and status
   const withRows = await db`
-    SELECT status, COALESCE(SUM(amount), 0) as total
+    SELECT balance_type, status, COALESCE(SUM(amount), 0) as total
     FROM withdrawals
     WHERE user_id = ${userId}
-    GROUP BY status
+    GROUP BY balance_type, status
   `.catch(() => [])
 
-  let pendingWithdrawn = 0
-  let approvedWithdrawn = 0
-  let rejectedWithdrawn = 0
+  let mainPendingWithdrawn = 0
+  let mainApprovedWithdrawn = 0
+  let mainRejectedWithdrawn = 0
+
+  let refPendingWithdrawn = 0
+  let refApprovedWithdrawn = 0
+  let refRejectedWithdrawn = 0
 
   for (const w of withRows) {
     const amt = Number(w.total) || 0
-    if (w.status === "PENDING") {
-      pendingWithdrawn += amt
-    } else if (w.status === "APPROVED" || w.status === "PAID") {
-      approvedWithdrawn += amt
-    } else if (w.status === "REJECTED") {
-      rejectedWithdrawn += amt
+    const bType = w.balance_type === "referral" ? "referral" : "main"
+    if (bType === "referral") {
+      if (w.status === "PENDING") refPendingWithdrawn += amt
+      else if (w.status === "APPROVED" || w.status === "PAID") refApprovedWithdrawn += amt
+      else if (w.status === "REJECTED") refRejectedWithdrawn += amt
+    } else {
+      if (w.status === "PENDING") mainPendingWithdrawn += amt
+      else if (w.status === "APPROVED" || w.status === "PAID") mainApprovedWithdrawn += amt
+      else if (w.status === "REJECTED") mainRejectedWithdrawn += amt
     }
   }
 
-  // Active deductions = all withdrawals that are not rejected
-  const withdrawnTotal = pendingWithdrawn + approvedWithdrawn
+  const mainWithdrawnTotal = mainPendingWithdrawn + mainApprovedWithdrawn
+  const refWithdrawnTotal = refPendingWithdrawn + refApprovedWithdrawn
 
-  // 5. Game state
+  // 6. Admin Adjustments
+  const adjRows = await db`
+    SELECT balance_type, COALESCE(SUM(amount), 0) as total
+    FROM wallet_adjustments
+    WHERE user_id = ${userId}
+    GROUP BY balance_type
+  `.catch(() => [])
+
+  let mainAdminAdj = 0
+  let refAdminAdj = 0
+  for (const a of adjRows) {
+    const amt = Number(a.total) || 0
+    if (a.balance_type === "referral") refAdminAdj += amt
+    else mainAdminAdj += amt
+  }
+
+  // 7. Game state (daily claims, welcomes, check-ins)
   const [gsRow] = await db`
     SELECT state FROM game_states WHERE user_id = ${userId} LIMIT 1
   `.catch(() => [undefined])
@@ -87,6 +147,8 @@ export async function getUserWalletSummary(userId: string): Promise<UserWalletSu
   const state = parseGameState(gsRow?.state)
 
   let gameEarned = 0
+  let historyWalletBuys = 0
+
   if (Array.isArray(state.history)) {
     for (const h of state.history) {
       if (!h) continue
@@ -100,28 +162,66 @@ export async function getUserWalletSummary(userId: string): Promise<UserWalletSu
       ) {
         gameEarned += c
       }
+
+      // If state history has wallet plan buys not captured in DB orders table
+      if (h.kind === "buy" && c < 0 && !String(h.id || "").startsWith("ORD_")) {
+        historyWalletBuys += Math.abs(c)
+      }
     }
   }
 
-  const commTotal = Number(commRow?.total) || 0
+  const commTotal = (Number(commRow?.total) || 0) + refAdminAdj
   const giftTotal = Number(giftRow?.total) || 0
   const rechTotal = Number(rechRow?.total) || 0
+  const walletPlanPurchasesTotal = (Number(walletBuysRow?.total) || 0) + historyWalletBuys
 
-  const totalEarned = commTotal + giftTotal + rechTotal + gameEarned
-  const availableBalance = Math.max(0, totalEarned - withdrawnTotal)
+  // Main Wallet balances
+  const mainTotalEarned = rechTotal + giftTotal + gameEarned + mainAdminAdj
+  const mainAvailableBalance = Math.max(0, mainTotalEarned - mainWithdrawnTotal - walletPlanPurchasesTotal)
+
+  // Referral Wallet balances
+  const referralTotalEarned = commTotal
+  const referralAvailableBalance = Math.max(0, referralTotalEarned - refWithdrawnTotal)
+
+  // Overall Combined balances
+  const availableBalance = mainAvailableBalance + referralAvailableBalance
+  const totalEarned = mainTotalEarned + referralTotalEarned
+  const withdrawnTotal = mainWithdrawnTotal + refWithdrawnTotal
+  const pendingWithdrawn = mainPendingWithdrawn + refPendingWithdrawn
+  const approvedWithdrawn = mainApprovedWithdrawn + refApprovedWithdrawn
+  const rejectedWithdrawn = mainRejectedWithdrawn + refRejectedWithdrawn
 
   return {
     userId,
+    // Main wallet
+    mainAvailableBalance,
+    mainTotalEarned,
+    rechTotal,
+    giftTotal,
+    gameEarned,
+    walletPlanPurchasesTotal,
+    mainWithdrawnTotal,
+    mainPendingWithdrawn,
+    mainApprovedWithdrawn,
+    mainRejectedWithdrawn,
+
+    // Referral wallet
+    referralAvailableBalance,
+    referralTotalEarned,
+    commTotal,
+    referralWithdrawnTotal: refWithdrawnTotal,
+    referralPendingWithdrawn: refPendingWithdrawn,
+    referralApprovedWithdrawn: refApprovedWithdrawn,
+    referralRejectedWithdrawn: refRejectedWithdrawn,
+
+    // Combined totals
     availableBalance,
     totalEarned,
-    commTotal,
-    giftTotal,
-    rechTotal,
-    gameEarned,
     withdrawnTotal,
     pendingWithdrawn,
     approvedWithdrawn,
     rejectedWithdrawn,
+
     state,
   }
 }
@@ -129,6 +229,8 @@ export async function getUserWalletSummary(userId: string): Promise<UserWalletSu
 export interface AllUsersWalletSummary {
   userSummaryMap: Map<string, UserWalletSummary>
   totalWalletBalance: number
+  totalMainBalance: number
+  totalReferralBalance: number
   totalPendingWithdrawals: number
   totalApprovedWithdrawals: number
 }
@@ -136,23 +238,20 @@ export interface AllUsersWalletSummary {
 /**
  * Bulk calculates authoritative wallet ledger balance for ALL users in high-performance aggregated queries.
  * Used by the Admin Panel to display accurate user balances and overall total system wallet balance.
- *
- * Queries run SEQUENTIALLY to stay within the connection pool limit (max: 3).
- * On Vercel serverless with Neon PostgreSQL, parallel queries exhaust the pool and cause timeouts.
  */
 export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary> {
-  // Sequential queries to avoid connection pool exhaustion (pool max: 3)
+  // Sequential queries to avoid connection pool exhaustion
   const users = await db`SELECT id FROM users`.catch(() => [])
   const gameStates = await db`SELECT user_id, state FROM game_states`.catch(() => [])
   const comms = await db`SELECT recipient_id, COALESCE(SUM(commission_amount), 0) as total FROM referral_commissions WHERE status = 'PAID' GROUP BY recipient_id`.catch(() => [])
   const gifts = await db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM gift_card_redemptions GROUP BY user_id`.catch(() => [])
   const rechs = await db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM orders WHERE plan_id = 'recharge' AND status = 'SUCCESS' GROUP BY user_id`.catch(() => [])
-  const withs = await db`SELECT user_id, status, COALESCE(SUM(amount), 0) as total FROM withdrawals GROUP BY user_id, status`.catch(() => [])
+  const walletBuys = await db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM orders WHERE plan_id != 'recharge' AND status = 'SUCCESS' AND txn_id = 'WALLET_BALANCE' GROUP BY user_id`.catch(() => [])
+  const withs = await db`SELECT user_id, balance_type, status, COALESCE(SUM(amount), 0) as total FROM withdrawals GROUP BY user_id, balance_type, status`.catch(() => [])
+  const adjs = await db`SELECT user_id, balance_type, COALESCE(SUM(amount), 0) as total FROM wallet_adjustments GROUP BY user_id, balance_type`.catch(() => [])
 
   const gsMap = new Map<string, Record<string, any>>()
-  for (const g of gameStates) {
-    gsMap.set(g.user_id, parseGameState(g.state))
-  }
+  for (const g of gameStates) gsMap.set(g.user_id, parseGameState(g.state))
 
   const commMap = new Map<string, number>()
   for (const c of comms) commMap.set(c.recipient_id, Number(c.total) || 0)
@@ -163,41 +262,68 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
   const rechMap = new Map<string, number>()
   for (const r of rechs) rechMap.set(r.user_id, Number(r.total) || 0)
 
-  const withPendingMap = new Map<string, number>()
-  const withApprovedMap = new Map<string, number>()
-  const withRejectedMap = new Map<string, number>()
+  const walletBuysMap = new Map<string, number>()
+  for (const b of walletBuys) walletBuysMap.set(b.user_id, Number(b.total) || 0)
+
+  const mainPendingMap = new Map<string, number>()
+  const mainApprovedMap = new Map<string, number>()
+  const mainRejectedMap = new Map<string, number>()
+
+  const refPendingMap = new Map<string, number>()
+  const refApprovedMap = new Map<string, number>()
+  const refRejectedMap = new Map<string, number>()
 
   for (const w of withs) {
     const amt = Number(w.total) || 0
-    if (w.status === "PENDING") {
-      withPendingMap.set(w.user_id, (withPendingMap.get(w.user_id) || 0) + amt)
-    } else if (w.status === "APPROVED" || w.status === "PAID") {
-      withApprovedMap.set(w.user_id, (withApprovedMap.get(w.user_id) || 0) + amt)
-    } else if (w.status === "REJECTED") {
-      withRejectedMap.set(w.user_id, (withRejectedMap.get(w.user_id) || 0) + amt)
+    const bType = w.balance_type === "referral" ? "referral" : "main"
+    if (bType === "referral") {
+      if (w.status === "PENDING") refPendingMap.set(w.user_id, (refPendingMap.get(w.user_id) || 0) + amt)
+      else if (w.status === "APPROVED" || w.status === "PAID") refApprovedMap.set(w.user_id, (refApprovedMap.get(w.user_id) || 0) + amt)
+      else if (w.status === "REJECTED") refRejectedMap.set(w.user_id, (refRejectedMap.get(w.user_id) || 0) + amt)
+    } else {
+      if (w.status === "PENDING") mainPendingMap.set(w.user_id, (mainPendingMap.get(w.user_id) || 0) + amt)
+      else if (w.status === "APPROVED" || w.status === "PAID") mainApprovedMap.set(w.user_id, (mainApprovedMap.get(w.user_id) || 0) + amt)
+      else if (w.status === "REJECTED") mainRejectedMap.set(w.user_id, (mainRejectedMap.get(w.user_id) || 0) + amt)
     }
+  }
+
+  const mainAdjMap = new Map<string, number>()
+  const refAdjMap = new Map<string, number>()
+  for (const a of adjs) {
+    const amt = Number(a.total) || 0
+    if (a.balance_type === "referral") refAdjMap.set(a.user_id, (refAdjMap.get(a.user_id) || 0) + amt)
+    else mainAdjMap.set(a.user_id, (mainAdjMap.get(a.user_id) || 0) + amt)
   }
 
   const userSummaryMap = new Map<string, UserWalletSummary>()
   let totalWalletBalance = 0
+  let totalMainBalance = 0
+  let totalReferralBalance = 0
   let totalPendingWithdrawals = 0
   let totalApprovedWithdrawals = 0
 
   for (const u of users) {
     const uid = u.id
     const state = gsMap.get(uid) || {}
-    const commTotal = commMap.get(uid) || 0
+    const commTotal = (commMap.get(uid) || 0) + (refAdjMap.get(uid) || 0)
     const giftTotal = giftMap.get(uid) || 0
     const rechTotal = rechMap.get(uid) || 0
-    const pendingWithdrawn = withPendingMap.get(uid) || 0
-    const approvedWithdrawn = withApprovedMap.get(uid) || 0
-    const rejectedWithdrawn = withRejectedMap.get(uid) || 0
-    const withdrawnTotal = pendingWithdrawn + approvedWithdrawn
+    const walletBuysTotal = walletBuysMap.get(uid) || 0
+    const mainAdminAdj = mainAdjMap.get(uid) || 0
 
-    totalPendingWithdrawals += pendingWithdrawn
-    totalApprovedWithdrawals += approvedWithdrawn
+    const mainPendingWithdrawn = mainPendingMap.get(uid) || 0
+    const mainApprovedWithdrawn = mainApprovedMap.get(uid) || 0
+    const mainRejectedWithdrawn = mainRejectedMap.get(uid) || 0
+    const mainWithdrawnTotal = mainPendingWithdrawn + mainApprovedWithdrawn
+
+    const refPendingWithdrawn = refPendingMap.get(uid) || 0
+    const refApprovedWithdrawn = refApprovedMap.get(uid) || 0
+    const refRejectedWithdrawn = refRejectedMap.get(uid) || 0
+    const refWithdrawnTotal = refPendingWithdrawn + refApprovedWithdrawn
 
     let gameEarned = 0
+    let historyWalletBuys = 0
+
     if (Array.isArray(state.history)) {
       for (const h of state.history) {
         if (!h) continue
@@ -210,26 +336,61 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
         ) {
           gameEarned += c
         }
+
+        if (h.kind === "buy" && c < 0 && !String(h.id || "").startsWith("ORD_")) {
+          historyWalletBuys += Math.abs(c)
+        }
       }
     }
 
-    const totalEarned = commTotal + giftTotal + rechTotal + gameEarned
-    const availableBalance = Math.max(0, totalEarned - withdrawnTotal)
+    const totalPlanBuys = walletBuysTotal + historyWalletBuys
+    const mainTotalEarned = rechTotal + giftTotal + gameEarned + mainAdminAdj
+    const mainAvailableBalance = Math.max(0, mainTotalEarned - mainWithdrawnTotal - totalPlanBuys)
+
+    const referralTotalEarned = commTotal
+    const referralAvailableBalance = Math.max(0, referralTotalEarned - refWithdrawnTotal)
+
+    const availableBalance = mainAvailableBalance + referralAvailableBalance
+    const totalEarned = mainTotalEarned + referralTotalEarned
+    const withdrawnTotal = mainWithdrawnTotal + refWithdrawnTotal
+    const pendingWithdrawn = mainPendingWithdrawn + refPendingWithdrawn
+    const approvedWithdrawn = mainApprovedWithdrawn + refApprovedWithdrawn
+    const rejectedWithdrawn = mainRejectedWithdrawn + refRejectedWithdrawn
 
     totalWalletBalance += availableBalance
+    totalMainBalance += mainAvailableBalance
+    totalReferralBalance += referralAvailableBalance
+    totalPendingWithdrawals += pendingWithdrawn
+    totalApprovedWithdrawals += approvedWithdrawn
 
     userSummaryMap.set(uid, {
       userId: uid,
+      mainAvailableBalance,
+      mainTotalEarned,
+      rechTotal,
+      giftTotal,
+      gameEarned,
+      walletPlanPurchasesTotal: totalPlanBuys,
+      mainWithdrawnTotal,
+      mainPendingWithdrawn,
+      mainApprovedWithdrawn,
+      mainRejectedWithdrawn,
+
+      referralAvailableBalance,
+      referralTotalEarned,
+      commTotal,
+      referralWithdrawnTotal: refWithdrawnTotal,
+      referralPendingWithdrawn: refPendingWithdrawn,
+      referralApprovedWithdrawn: refApprovedWithdrawn,
+      referralRejectedWithdrawn: refRejectedWithdrawn,
+
       availableBalance,
       totalEarned,
-      commTotal,
-      giftTotal,
-      rechTotal,
-      gameEarned,
       withdrawnTotal,
       pendingWithdrawn,
       approvedWithdrawn,
       rejectedWithdrawn,
+
       state,
     })
   }
@@ -237,6 +398,8 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
   return {
     userSummaryMap,
     totalWalletBalance,
+    totalMainBalance,
+    totalReferralBalance,
     totalPendingWithdrawals,
     totalApprovedWithdrawals,
   }

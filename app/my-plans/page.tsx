@@ -14,6 +14,7 @@ import {
   TrendingUpIcon,
   WalletIcon,
   ZapIcon,
+  Loader2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
@@ -24,10 +25,12 @@ import { cn } from "@/lib/utils"
 import { ClaimRewardModal } from "@/components/claim-modal"
 
 export default function MyPlansPage() {
-  const { ready: loaded, state, now, collect } = useStore()
+  const { ready: loaded, state, now, syncWithServer } = useStore()
   const [tab, setTab] = useState<"active" | "completed">("active")
   const [countdown, setCountdown] = useState("00:00:00")
   const [claimedReward, setClaimedReward] = useState<{ planName: string; coins: number; day?: number; totalDays?: number } | null>(null)
+  const [claimingAll, setClaimingAll] = useState(false)
+  const [claimingPlanId, setClaimingPlanId] = useState<string | null>(null)
 
   // Live countdown to midnight (Next income cycle)
   useEffect(() => {
@@ -57,15 +60,65 @@ export default function MyPlansPage() {
   const dailyIncome = running.reduce((sum, o) => sum + getPlan(o.planId).perDay, 0)
   const activeCount = running.length
 
-  // Claim all ready plans in 1 tap
-  function handleClaimAll() {
-    if (dueList.length === 0) return
-    const coins = collect()
-    setClaimedReward({
-      planName: dueList.length > 1 ? `${dueList.length} Solar Plans` : getPlan(dueList[0].planId).name,
-      coins,
-    })
-    toast.success(`Claimed ₹${fmt(coins)} from daily solar returns!`)
+  // Claim all ready plans in 1 tap via backend API
+  async function handleClaimAll() {
+    if (dueList.length === 0 || claimingAll) return
+    setClaimingAll(true)
+    try {
+      const res = await fetch("/api/game/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claimAll: true }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || data.error || "Failed to claim rewards")
+      }
+
+      await syncWithServer()
+      setClaimedReward({
+        planName: dueList.length > 1 ? `${dueList.length} Solar Plans` : getPlan(dueList[0].planId).name,
+        coins: data.claimedCoins,
+      })
+      toast.success(data.message || `🎉 Claimed ₹${fmt(data.claimedCoins)} from daily solar returns!`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Claim failed")
+    } finally {
+      setClaimingAll(false)
+    }
+  }
+
+  // Claim single plan via backend API
+  async function handleClaimSingle(ownedId: string) {
+    if (claimingPlanId) return
+    setClaimingPlanId(ownedId)
+    const targetOwned = running.find((o) => o.id === ownedId)
+    const targetPlan = targetOwned ? getPlan(targetOwned.planId) : null
+    try {
+      const res = await fetch("/api/game/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planInstanceId: ownedId }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || data.error || "Failed to claim reward")
+      }
+
+      await syncWithServer()
+      const firstClaim = data.claims?.[0]
+      setClaimedReward({
+        planName: firstClaim?.planName || targetPlan?.name || "Solar Plan",
+        coins: data.claimedCoins,
+        day: firstClaim?.day,
+        totalDays: firstClaim?.totalDays,
+      })
+      toast.success(data.message || `🎉 Claimed ₹${fmt(data.claimedCoins)} from ${targetPlan?.name || "plan"}!`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Claim failed")
+    } finally {
+      setClaimingPlanId(null)
+    }
   }
 
   return (
@@ -152,10 +205,11 @@ export default function MyPlansPage() {
 
           <button
             type="button"
+            disabled={claimingAll}
             onClick={handleClaimAll}
-            className="rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-amber-300 shadow-md hover:bg-slate-900 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+            className="rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-amber-300 shadow-md hover:bg-slate-900 active:scale-95 transition-all cursor-pointer whitespace-nowrap disabled:opacity-60"
           >
-            Claim All (₹{fmt(dueTotal)})
+            {claimingAll ? "Claiming..." : `Claim All (₹${fmt(dueTotal)})`}
           </button>
         </div>
       )}
@@ -222,10 +276,8 @@ export default function MyPlansPage() {
                 key={o.id}
                 owned={o}
                 countdown={countdown}
-                onClaim={collect}
-                onReward={(planName, coins, day, totalDays) =>
-                  setClaimedReward({ planName, coins, day, totalDays })
-                }
+                onClaim={() => handleClaimSingle(o.id)}
+                isClaiming={claimingPlanId === o.id}
               />
             ))}
           </div>
@@ -274,24 +326,18 @@ function SolarPlanOrderCard({
   owned: o,
   countdown,
   onClaim,
-  onReward,
+  isClaiming,
 }: {
   owned: Owned
   countdown: string
-  onClaim: (id: string) => number
-  onReward: (planName: string, coins: number, day?: number, totalDays?: number) => void
+  onClaim: () => void
+  isClaiming: boolean
 }) {
   const { now, state } = useStore()
   const plan = getPlan(o.planId)
   const isDue = ready(state, now).some((x) => x.id === o.id)
   const progressPercent = Math.min(100, Math.round((o.claimed / plan.days) * 100))
   const remainingDays = Math.max(0, plan.days - o.claimed)
-
-  function handleClaim() {
-    const coins = onClaim(o.id)
-    onReward(plan.name, coins, o.claimed + 1, plan.days)
-    toast.success(`Claimed ₹${fmt(coins)} from ${plan.name}!`)
-  }
 
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm border border-amber-200/80 hover:shadow-md transition-shadow">
@@ -369,11 +415,21 @@ function SolarPlanOrderCard({
         {isDue ? (
           <button
             type="button"
-            onClick={handleClaim}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 py-3 px-4 text-xs font-black text-slate-950 shadow-md shadow-amber-500/25 hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+            disabled={isClaiming}
+            onClick={onClaim}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 py-3 px-4 text-xs font-black text-slate-950 shadow-md shadow-amber-500/25 hover:opacity-95 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
           >
-            <CoinsIcon className="size-4 text-slate-950" />
-            <span>Claim Today&apos;s Return (₹{fmt(plan.perDay)})</span>
+            {isClaiming ? (
+              <span className="flex items-center gap-2">
+                <Loader2Icon className="size-4 animate-spin text-slate-950" />
+                Claiming...
+              </span>
+            ) : (
+              <>
+                <CoinsIcon className="size-4 text-slate-950" />
+                <span>Claim Today&apos;s Return (₹{fmt(plan.perDay)})</span>
+              </>
+            )}
           </button>
         ) : (
           <div className="flex items-center justify-between rounded-xl bg-emerald-50/80 py-2.5 px-3.5 text-xs font-bold text-emerald-900 border border-emerald-200/60">
