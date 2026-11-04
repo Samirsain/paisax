@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       return []
     })
 
-    // 3. Fetch all withdrawals
+    // 3. Fetch all withdrawals with fund source breakdown
     const withdrawalsRows = await db`
       SELECT 
         w.id,
@@ -84,8 +84,13 @@ export async function GET(req: NextRequest) {
         w.admin_note,
         w.created_at,
         w.updated_at,
+        w.balance_type,
         u.name as user_name,
-        u.phone as user_phone
+        u.phone as user_phone,
+        COALESCE((SELECT SUM(gcr.amount) FROM gift_card_redemptions gcr WHERE gcr.user_id = w.user_id), 0) as gift_total,
+        COALESCE((SELECT SUM(o2.amount) FROM orders o2 WHERE o2.user_id = w.user_id AND o2.plan_id = 'recharge' AND o2.status = 'SUCCESS'), 0) as recharge_total,
+        COALESCE((SELECT SUM(o3.amount) FROM orders o3 WHERE o3.user_id = w.user_id AND o3.plan_id != 'free' AND o3.plan_id != 'recharge' AND o3.status = 'SUCCESS'), 0) as plan_deposit_total,
+        EXISTS(SELECT 1 FROM orders o4 WHERE o4.user_id = w.user_id AND o4.plan_id != 'free' AND o4.plan_id != 'recharge' AND o4.status = 'SUCCESS') as has_paid_plan
       FROM withdrawals w
       JOIN users u ON u.id = w.user_id
       ORDER BY w.created_at DESC
@@ -375,6 +380,11 @@ export async function GET(req: NextRequest) {
         adminNote: w.admin_note,
         createdAt: w.created_at,
         updatedAt: w.updated_at,
+        // Fund source breakdown
+        giftTotal: Number(w.gift_total) || 0,
+        rechargeTotal: Number(w.recharge_total) || 0,
+        planDepositTotal: Number(w.plan_deposit_total) || 0,
+        hasPaidPlan: Boolean(w.has_paid_plan),
       })),
       commissions: commissionsRows.map((c: any) => ({
         id: c.id,

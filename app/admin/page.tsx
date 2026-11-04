@@ -135,6 +135,11 @@ interface WithdrawalItem {
   adminNote: string | null
   createdAt: string
   updatedAt: string
+  // Fund source
+  giftTotal: number
+  rechargeTotal: number
+  planDepositTotal: number
+  hasPaidPlan: boolean
 }
 
 interface CommissionItem {
@@ -1588,6 +1593,40 @@ export default function AdminPage() {
                               hour12: true,
                             })}
                           </p>
+
+                          {/* Fund Source Badges */}
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            {!w.hasPaidPlan && (
+                              <span className="rounded-full bg-red-500/15 border border-red-500/40 px-2 py-0.5 text-[9px] font-black text-red-400 uppercase tracking-wider">
+                                ⚠ No Paid Plan
+                              </span>
+                            )}
+                            {w.hasPaidPlan && (
+                              <span className="rounded-full bg-emerald-500/15 border border-emerald-500/40 px-2 py-0.5 text-[9px] font-black text-emerald-400 uppercase tracking-wider">
+                                ✓ Paid Investor
+                              </span>
+                            )}
+                            {w.giftTotal > 0 && (
+                              <span className="rounded-full bg-purple-500/15 border border-purple-500/40 px-2 py-0.5 text-[9px] font-black text-purple-400">
+                                🎁 Gift ₹{w.giftTotal.toLocaleString("en-IN")}
+                              </span>
+                            )}
+                            {w.rechargeTotal > 0 && (
+                              <span className="rounded-full bg-blue-500/15 border border-blue-500/40 px-2 py-0.5 text-[9px] font-black text-blue-400">
+                                💳 Recharge ₹{w.rechargeTotal.toLocaleString("en-IN")}
+                              </span>
+                            )}
+                            {w.planDepositTotal > 0 && (
+                              <span className="rounded-full bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[9px] font-black text-amber-400">
+                                ☀ Plan Deposit ₹{w.planDepositTotal.toLocaleString("en-IN")}
+                              </span>
+                            )}
+                            {w.giftTotal === 0 && w.rechargeTotal === 0 && w.planDepositTotal === 0 && (
+                              <span className="rounded-full bg-slate-500/15 border border-slate-500/40 px-2 py-0.5 text-[9px] font-bold text-slate-400">
+                                Earnings Only
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Bank Details Box */}
