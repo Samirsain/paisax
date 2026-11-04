@@ -267,12 +267,11 @@ export function useStore() {
   const now = useSyncExternalStore(subscribe, getClock, () => 0)
 
   useEffect(() => {
-    if (!syncInitialized) {
-      syncInitialized = true
-      syncWithServer()
-      const syncInterval = setInterval(syncWithServer, 20_000)
-      return () => clearInterval(syncInterval)
-    }
+    syncWithServer().catch(() => {})
+    const syncInterval = setInterval(() => {
+      syncWithServer().catch(() => {})
+    }, 20_000)
+    return () => clearInterval(syncInterval)
   }, [])
 
   return { ready: s !== null, now, state: s ?? game.newPlayer("Rahul", 0), ...actions }

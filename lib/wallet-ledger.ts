@@ -91,11 +91,12 @@ export async function getUserWalletSummary(userId: string): Promise<UserWalletSu
     for (const h of state.history) {
       if (!h) continue
       const c = Number(h.coins) || 0
-      // Legitimate gameplay earnings (claim, checkin, welcome, invite). Exclude refunds or card/comm duplicates
+      // Legitimate gameplay earnings (claim, checkin, welcome, invite). Exclude orders or refund/comm duplicates
       if (
         (h.kind === "claim" || h.kind === "checkin" || h.kind === "welcome" || h.kind === "invite") &&
         c > 0 &&
-        !String(h.id || "").startsWith("REF_")
+        !String(h.id || "").startsWith("REF_") &&
+        !String(h.id || "").startsWith("ORD_")
       ) {
         gameEarned += c
       }
@@ -204,7 +205,8 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
         if (
           (h.kind === "claim" || h.kind === "checkin" || h.kind === "welcome" || h.kind === "invite") &&
           c > 0 &&
-          !String(h.id || "").startsWith("REF_")
+          !String(h.id || "").startsWith("REF_") &&
+          !String(h.id || "").startsWith("ORD_")
         ) {
           gameEarned += c
         }

@@ -178,7 +178,7 @@ export async function creditOrderToUser(orderId: string, utr?: string) {
           id: orderId,
           at: now,
           coins: Number(order.amount),
-          kind: "welcome",
+          kind: "recharge",
         },
         ...state.history,
       ]

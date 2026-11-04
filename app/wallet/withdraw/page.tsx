@@ -292,12 +292,7 @@ export default function WithdrawPage() {
       // Deduct immediately in store and synchronize
       const nextRemaining = typeof data.remainingBalance === "number" ? data.remainingBalance : Math.max(0, available - amt)
       setServerBalance(nextRemaining)
-      try {
-        setCoins(nextRemaining)
-        withdraw(amt, "bank")
-      } catch {
-        setCoins(nextRemaining)
-      }
+      setCoins(nextRemaining)
       syncWithServer().catch(() => {})
 
       const savedDetails = {

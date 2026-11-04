@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || "admin786"
+const ADMIN_PASS = process.env.ADMIN_PASSWORD || "Mayank@#025"
 
 export async function POST(req: NextRequest) {
   try {

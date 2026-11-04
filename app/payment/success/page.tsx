@@ -33,7 +33,7 @@ function SuccessContent() {
         const data = await res.json()
 
         if (data.status === "SUCCESS" || data.credited) {
-          if (data.planId) {
+          if (data.planId && data.planId !== "recharge") {
             try {
               activatePlan(data.planId, orderId)
             } catch {

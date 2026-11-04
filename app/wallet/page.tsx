@@ -86,6 +86,7 @@ export default function WalletPage() {
 
   useEffect(() => {
     loadTransactions()
+    syncWithServer().catch(() => {})
   }, [])
 
   // Combine real DB records with local daily return claims
