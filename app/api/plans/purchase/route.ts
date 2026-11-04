@@ -50,23 +50,37 @@ export async function POST(req: NextRequest) {
 
     // ── 1. FREE PLAN VALIDATION ──────────────────────────────────────────────
     if (planId === "free") {
-      const alreadyHasFree = owned.some((o: any) => o.planId === "free")
-      if (alreadyHasFree) {
+      const alreadyHasFreeInState = owned.some((o: any) => o.planId === "free")
+      const [existingFreeOrder] = await db`SELECT id FROM orders WHERE user_id = ${uid} AND plan_id = 'free' LIMIT 1`
+      if (alreadyHasFreeInState || existingFreeOrder) {
         return NextResponse.json({ error: "Free trial plan can only be claimed once per user" }, { status: 400 })
       }
 
       const now = Date.now()
+      const rand = crypto.randomBytes(3).toString("hex").toUpperCase()
+      const orderId = `ORD_FREE_${now}_${rand}`
+
+      // Record free trial order in orders table for auditability and persistent recovery
+      await db`
+        INSERT INTO orders (
+          id, user_id, plan_id, amount, status, txn_id, credited_to_wallet, created_at, updated_at
+        ) VALUES (
+          ${orderId}, ${uid}, 'free', 0, 'SUCCESS', 'FREE_TRIAL', true, now(), now()
+        )
+      `
+
       const freePlanEntry = {
-        id: `free_${now}`,
+        id: orderId,
         planId: "free" as PlanId,
         claimed: 0,
         boughtAt: now,
         lastClaimAt: null,
+        status: "active" as const,
       }
 
       const updatedOwned = [freePlanEntry, ...owned]
       const updatedHistory = [
-        { id: `BUY_free_${now}`, at: now, coins: 0, kind: "buy", planId: "free" },
+        { id: `BUY_${orderId}`, at: now, coins: 0, kind: "buy", planId: "free" },
         ...(Array.isArray(state.history) ? state.history : []),
       ]
 
@@ -79,9 +93,12 @@ export async function POST(req: NextRequest) {
         SET state = ${JSON.stringify(updatedState)}::jsonb, updated_at = now()
       `
 
+      console.log(`[PlanPurchase] User ${uid} activated Free Solar Trial Plan (Order: ${orderId})`)
+
       return NextResponse.json({
         success: true,
         activated: true,
+        orderId,
         planId,
         planName: plan.name,
         message: "Free Solar Trial Plan successfully activated!",

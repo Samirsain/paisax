@@ -23,7 +23,7 @@ import { fmt, useStore } from "@/lib/store"
 
 /** Confirm, then purchase via Wallet balance or AeroPay online payment. */
 export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: () => void }) {
-  const { state, syncWithServer } = useStore()
+  const { state, syncWithServer, activatePlan, setCoins } = useStore()
   const router = useRouter()
   const [shown, setShown] = useState(planId)
   const [done, setDone] = useState(false)
@@ -63,9 +63,18 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
         body: JSON.stringify({ planId: "free", paymentMethod: "wallet" }),
       })
       const data = await res.json()
+
+      if (res.status === 401) {
+        setPayError("Please login to proceed with activation.")
+        router.push("/login")
+        return
+      }
+
       if (!res.ok) {
         throw new Error(data.error || "Failed to activate free plan")
       }
+
+      activatePlan("free", data.orderId)
       await syncWithServer()
       setDone(true)
       toast.success("Free Solar Trial Plan is now active!")
@@ -98,6 +107,8 @@ export function BuySheet({ planId, onClose }: { planId: PlanId | null; onClose: 
         throw new Error(data.error || "Failed to purchase plan with wallet balance")
       }
 
+      activatePlan(shown, data.orderId)
+      setCoins(Math.max(0, walletBalance - plan.cost))
       await syncWithServer()
       setDone(true)
       toast.success(`🎉 ${plan.name} purchased successfully using wallet balance!`)

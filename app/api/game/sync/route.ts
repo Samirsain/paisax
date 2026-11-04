@@ -271,19 +271,43 @@ export async function POST(req: NextRequest) {
     const confirmedOrderIds = new Set(confirmedOrders.map((o: any) => o.id))
     const confirmedPlanIds = new Set(confirmedOrders.map((o: any) => o.plan_id))
 
-    // 3. Sanitize owned plans: ONLY keep plans backed by actual database orders or free plan
+    // 3. Sanitize and merge owned plans:
+    // CRITICAL FIX: Server-active plans must NEVER be erased by an empty or lagged client sync
     const rawOwned = Array.isArray(state.owned) ? state.owned : []
 
-    const sanitizedOwned = rawOwned.filter((o: any) => {
-      if (!o || typeof o !== "object") return false
-      // Free trial plan is always allowed (1 per user)
+    const serverOwned = (Array.isArray(currentServerState.owned) ? currentServerState.owned : []).filter((o: any) => {
+      if (!o || typeof o !== "object" || !o.planId) return false
       if (o.planId === "free") return true
-      // Paid plans MUST be backed by a confirmed order in the database
-      return (
-        confirmedOrderIds.has(o.id) ||
-        confirmedPlanIds.has(o.planId)
-      )
+      return confirmedOrderIds.has(o.id) || confirmedPlanIds.has(o.planId)
     })
+
+    const clientOwned = rawOwned.filter((o: any) => {
+      if (!o || typeof o !== "object" || !o.planId) return false
+      if (o.planId === "free") return true
+      return confirmedOrderIds.has(o.id) || confirmedPlanIds.has(o.planId)
+    })
+
+    // Merge: start with serverOwned, preserve claims and progress
+    const ownedMap = new Map<string, any>()
+    for (const so of serverOwned) {
+      const key = so.id || so.planId
+      ownedMap.set(key, so)
+    }
+    for (const co of clientOwned) {
+      const key = co.id || co.planId
+      const existing = ownedMap.get(key)
+      if (existing) {
+        ownedMap.set(key, {
+          ...existing,
+          claimed: Math.max(Number(existing.claimed) || 0, Number(co.claimed) || 0),
+          lastClaimAt: co.lastClaimAt || existing.lastClaimAt,
+          status: co.status || existing.status,
+        })
+      } else {
+        ownedMap.set(key, co)
+      }
+    }
+    const sanitizedOwned = Array.from(ownedMap.values())
 
     // 4. Merge history to ensure server-side commissions, gift cards, and withdrawals are never lost
     const clientHistory = Array.isArray(state.history) ? state.history : []

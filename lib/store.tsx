@@ -169,6 +169,20 @@ export async function syncWithServer() {
         currentState.coins === 775 ||
         Array.isArray(srv.owned)
       ) {
+        // Merge server-owned plans with local state owned plans so newly added plans are never lost
+        const serverOwnedList = Array.isArray(srv.owned) ? srv.owned : []
+        const currentOwnedList = Array.isArray(currentState.owned) ? currentState.owned : []
+        const ownedMap = new Map<string, any>()
+        for (const so of serverOwnedList) {
+          ownedMap.set(so.id || so.planId, so)
+        }
+        for (const co of currentOwnedList) {
+          const key = co.id || co.planId
+          if (!ownedMap.has(key)) {
+            ownedMap.set(key, co)
+          }
+        }
+
         nextState = {
           ...nextState,
           name: data.user?.name || srv.name || nextState.name,
@@ -177,7 +191,7 @@ export async function syncWithServer() {
           streak: Number(srv.streak) || 0,
           bestStreak: Number(srv.bestStreak) || 0,
           inviteCode: data.user?.inviteCode || srv.inviteCode || nextState.inviteCode,
-          owned: Array.isArray(srv.owned) ? srv.owned : [],
+          owned: Array.from(ownedMap.values()),
           history: Array.isArray(srv.history) ? srv.history : [],
         }
         updated = true
@@ -280,7 +294,7 @@ export function useStore() {
     return () => clearInterval(syncInterval)
   }, [])
 
-  return { ready: s !== null, now, state: s ?? game.newPlayer("Rahul", 0), ...actions }
+  return { ready: s !== null, now, state: s ?? game.newPlayer("Player", 0), ...actions }
 }
 
 const num = new Intl.NumberFormat("en-IN")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { ArrowRightIcon, CheckCircle2Icon, ShoppingCartIcon } from "lucide-react"
 import { BuySheet } from "@/components/buy-sheet"
@@ -10,9 +10,14 @@ import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 export default function PlansPage() {
-  const { ready: loaded, state } = useStore()
+  const { ready: loaded, state, syncWithServer } = useStore()
   const [buying, setBuying] = useState<PlanId | null>(null)
   const [filter, setFilter] = useState<"all" | "normal" | "vip">("all")
+
+  // Sync on mount to immediately show activated plans
+  useEffect(() => {
+    syncWithServer().catch(() => {})
+  }, [syncWithServer])
 
   if (!loaded) return <Skeleton />
 

@@ -78,11 +78,16 @@ const WITHDRAWAL_TESTIMONIALS = [
 ]
 
 export default function HomePage() {
-  const { ready: loaded, state, now } = useStore()
+  const { ready: loaded, state, now, syncWithServer } = useStore()
   const [buying, setBuying] = useState<PlanId | null>(null)
   const [tab, setTab] = useState<"normal" | "vip">("normal")
   const [bannerIdx, setBannerIdx] = useState(0)
   const [tickerIdx, setTickerIdx] = useState(0)
+
+  // Sync on mount to immediately show activated plans
+  useEffect(() => {
+    syncWithServer().catch(() => {})
+  }, [syncWithServer])
 
   // Live rotating ticker timer
   useEffect(() => {

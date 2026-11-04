@@ -32,6 +32,11 @@ export default function MyPlansPage() {
   const [claimingAll, setClaimingAll] = useState(false)
   const [claimingPlanId, setClaimingPlanId] = useState<string | null>(null)
 
+  // Sync on mount to immediately show activated plans
+  useEffect(() => {
+    syncWithServer().catch(() => {})
+  }, [syncWithServer])
+
   // Live countdown to midnight (Next income cycle)
   useEffect(() => {
     function updateTimer() {
