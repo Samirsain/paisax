@@ -26,7 +26,7 @@ import {
 import { toast } from "sonner"
 import { Skeleton } from "@/components/marks"
 import { Button } from "@/components/ui/button"
-import { canWithdrawToday, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
+import { canWithdrawToday, hasBoughtPaidPlan, WITHDRAW_FEE_PCT, WITHDRAW_MIN } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -59,6 +59,7 @@ export default function WithdrawPage() {
 
   // Saved Bank Details State
   const [serverBalance, setServerBalance] = useState<number | null>(null)
+  const [serverHasPaidPlan, setServerHasPaidPlan] = useState<boolean | null>(null)
   const [hasSavedBank, setHasSavedBank] = useState(false)
   const [isEditingBank, setIsEditingBank] = useState(false)
   const [savingDetails, setSavingDetails] = useState(false)
@@ -128,6 +129,9 @@ export default function WithdrawPage() {
         if (typeof data?.availableBalance === "number") {
           setServerBalance(data.availableBalance)
         }
+        if (typeof data?.hasPaidPlan === "boolean") {
+          setServerHasPaidPlan(data.hasPaidPlan)
+        }
         if (data?.hasSavedBank && data.bankDetails) {
           const b = data.bankDetails
           setAccountName(b.accountName || "")
@@ -166,6 +170,8 @@ export default function WithdrawPage() {
 
   const today = canWithdrawToday()
   const dayName = new Date().toLocaleDateString("en-IN", { weekday: "long" })
+  const isPaidInvestor =
+    serverHasPaidPlan !== null ? serverHasPaidPlan : hasBoughtPaidPlan(state)
   const mainWalletCoins = typeof serverBalance === "number" ? serverBalance : (mainBalance || state.coins)
   const available = Math.max(0, balanceType === "main" ? mainWalletCoins : referralBalance)
   const amt = parseInt(amount, 10) || 0
@@ -173,6 +179,7 @@ export default function WithdrawPage() {
   const netPayout = Math.max(0, amt - fee)
 
   const isFormValid =
+    isPaidInvestor &&
     today &&
     amt >= WITHDRAW_MIN &&
     amt <= available &&
@@ -259,6 +266,10 @@ export default function WithdrawPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!isPaidInvestor) {
+      setError("Bank withdrawals require at least one active paid solar investment plan. Please upgrade to unlock.")
+      return
+    }
     if (!today) {
       setError(`Withdrawals are closed on weekends (${dayName}). Please request on Monday.`)
       return
@@ -530,11 +541,53 @@ export default function WithdrawPage() {
                 Min. ₹{WITHDRAW_MIN} · Available: ₹{fmt(available)}
               </p>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 border border-emerald-200">
-              <CheckCircle2Icon className="size-3 text-emerald-600" />
-              <span>Unlocked</span>
+            <span className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold border",
+              isPaidInvestor
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-red-50 text-red-700 border-red-200"
+            )}>
+              {isPaidInvestor ? (
+                <>
+                  <CheckCircle2Icon className="size-3 text-emerald-600" />
+                  <span>Unlocked</span>
+                </>
+              ) : (
+                <>
+                  <LockIcon className="size-3 text-red-500" />
+                  <span>Locked</span>
+                </>
+              )}
             </span>
           </div>
+
+          {/* ── PAID PLAN REQUIRED LOCK BANNER ────────────────────── */}
+          {!isPaidInvestor && (
+            <div className="mt-3 rounded-2xl bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 p-4 border border-amber-300/80 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-amber-100 border border-amber-300 shrink-0">
+                  <LockIcon className="size-5 text-amber-700" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-black text-amber-950">
+                    Withdrawals Locked — Paid Plan Required
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                    Bank withdrawals are exclusively available for active solar investors.
+                    Purchase at least <strong>1 paid solar plan</strong> to permanently unlock instant bank transfers.
+                  </p>
+                  <Link
+                    href="/plans"
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-[11px] font-black text-white shadow-sm active:scale-95 transition-all"
+                  >
+                    <SparklesIcon className="size-3.5" />
+                    <span>View Investment Plans</span>
+                    <ArrowRightIcon className="size-3" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Quick preset amount pills */}
           <div className="mt-3 grid grid-cols-4 gap-2">
@@ -844,6 +897,8 @@ export default function WithdrawPage() {
           >
             {loading
               ? "Processing Bank Request..."
+              : !isPaidInvestor
+              ? "🔒 Upgrade to Paid Plan to Withdraw"
               : !today
               ? "Withdrawals Closed on Weekends"
               : available < WITHDRAW_MIN

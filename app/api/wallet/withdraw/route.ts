@@ -63,8 +63,22 @@ export async function GET(req: NextRequest) {
 
     const hasSavedBank = Boolean(accountNumber && accountNumber.trim().length >= 6)
 
+    // Check if user has an active paid plan or confirmed paid order
+    const confirmedPaidOrders = await db`
+      SELECT id FROM orders
+      WHERE user_id = ${uid}
+        AND plan_id != 'free'
+        AND plan_id != 'recharge'
+        AND status = 'SUCCESS'
+      LIMIT 1
+    `
+
     // Authoritative ledger summary (separate Main Wallet vs Referral Earnings)
     const summary = await getUserWalletSummary(uid)
+    const userOwnedPaidPlan = Array.isArray(summary.state?.owned) && summary.state.owned.some(
+      (o: any) => o && o.planId !== "free" && o.status !== "deactivated"
+    )
+    const hasPaidPlan = confirmedPaidOrders.length > 0 || Boolean(userOwnedPaidPlan)
 
     // Synchronize game_states if different so entire app remains consistent
     if (Number(summary.state.coins) !== summary.availableBalance) {
@@ -81,6 +95,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       hasSavedBank,
+      hasPaidPlan,
       // Main wallet
       mainAvailableBalance: summary.mainAvailableBalance,
       mainTotalEarned: summary.mainTotalEarned,
@@ -215,8 +230,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Authoritative balance check based on chosen balanceType
+    // Strict Business Rule: User MUST have at least one active paid plan (cost > 0) to withdraw!
+    // Free trial users cannot withdraw without purchasing a paid plan.
+    const confirmedPaidOrders = await db`
+      SELECT id FROM orders
+      WHERE user_id = ${uid}
+        AND plan_id != 'free'
+        AND plan_id != 'recharge'
+        AND status = 'SUCCESS'
+      LIMIT 1
+    `
+
     const summary = await getUserWalletSummary(uid)
+    const userOwnedPaidPlan = Array.isArray(summary.state?.owned) && summary.state.owned.some(
+      (o: any) => o && o.planId !== "free" && o.status !== "deactivated"
+    )
+
+    if (confirmedPaidOrders.length === 0 && !userOwnedPaidPlan) {
+      return NextResponse.json(
+        {
+          error: "Withdrawals are restricted to investors. Please purchase at least one active solar plan to unlock bank withdrawals.",
+          requiresPaidPlan: true,
+        },
+        { status: 403 }
+      )
+    }
+
+    // Authoritative balance check based on chosen balanceType
     const availableForType =
       balanceType === "referral"
         ? summary.referralAvailableBalance
