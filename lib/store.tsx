@@ -5,7 +5,7 @@ import * as game from "@/lib/game"
 import type { PlanId, State } from "@/lib/game"
 import { notifyWalletCredit } from "@/lib/notifications"
 
-const KEY = "paisax:v1"
+const KEY = "paisax:v2"
 
 let state: State | null = null
 let clock = 0
@@ -25,16 +25,21 @@ function readInviteCode(): string | null {
 function getState(): State {
   if (state === null) {
     try {
+      // Clear legacy storage keys with Rahul / 775 coins
+      try {
+        localStorage.removeItem("paisax:v1")
+        localStorage.removeItem("paisax_state")
+      } catch {}
+
       const saved = JSON.parse(localStorage.getItem(KEY) ?? "null")
-      if (game.isState(saved)) {
+      if (game.isState(saved) && saved.name !== "Rahul" && saved.coins !== 775) {
         state = { ...saved, owned: game.sanitizeOwned(saved.owned) }
       } else {
-        // New player: capture invite code from URL if present
         const inviteFrom = readInviteCode()
         state = game.newPlayer("Player", Date.now(), inviteFrom ?? undefined)
       }
     } catch {
-      state = game.demoPlayer(Date.now())
+      state = game.newPlayer("Player", Date.now())
     }
   }
   return state!
@@ -95,7 +100,17 @@ export async function syncWithServer() {
     const res = await fetch("/api/game/sync")
     if (!res.ok) return
     const data = await res.json()
-    if (!data.authenticated) return
+    if (!data.authenticated) {
+      // If server says force logout, clear local storage and redirect to login
+      if (data.forceLogout) {
+        try {
+          localStorage.removeItem("paisax_state")
+          localStorage.removeItem("paisax_saved_bank")
+        } catch {}
+        window.location.href = "/login"
+      }
+      return
+    }
 
     const currentState = getState()
     let updated = false
@@ -151,30 +166,21 @@ export async function syncWithServer() {
       if (
         currentState.name === "Player" ||
         currentState.name === "Rahul" ||
-        (Array.isArray(srv.owned) && srv.owned.length > currentState.owned.length)
+        currentState.coins === 775 ||
+        Array.isArray(srv.owned)
       ) {
         nextState = {
           ...nextState,
           name: data.user?.name || srv.name || nextState.name,
-          coins: !isNaN(srvCoins) ? srvCoins : nextState.coins,
-          lifetime: Math.max(srvLifetime, nextState.lifetime),
-          streak: Math.max(Number(srv.streak) || 0, currentState.streak),
-          bestStreak: Math.max(Number(srv.bestStreak) || 0, currentState.bestStreak),
+          coins: !isNaN(srvCoins) ? srvCoins : 0,
+          lifetime: srvLifetime,
+          streak: Number(srv.streak) || 0,
+          bestStreak: Number(srv.bestStreak) || 0,
           inviteCode: data.user?.inviteCode || srv.inviteCode || nextState.inviteCode,
-          owned: Array.isArray(srv.owned) && srv.owned.length > 0 ? srv.owned : nextState.owned,
-          history: Array.isArray(srv.history) && srv.history.length > 0 ? srv.history : nextState.history,
+          owned: Array.isArray(srv.owned) ? srv.owned : [],
+          history: Array.isArray(srv.history) ? srv.history : [],
         }
         updated = true
-      }
-
-      // 5. Merge any missing owned plans from serverState
-      if (Array.isArray(srv.owned)) {
-        for (const srvOwned of srv.owned) {
-          if (!nextState.owned.some((o) => o.id === srvOwned.id || (o.planId === srvOwned.planId && o.boughtAt === srvOwned.boughtAt))) {
-            nextState.owned = [srvOwned, ...nextState.owned]
-            updated = true
-          }
-        }
       }
     }
 

@@ -128,6 +128,7 @@ export interface Owned {
   claimed: number
   boughtAt: number
   lastClaimAt: number | null
+  status?: "active" | "deactivated"
 }
 
 export type Entry = { id: string; at: number; coins: number } & (
@@ -187,14 +188,17 @@ export function dayOf(t: number) {
 }
 
 export const isDone = (o: Owned) => o.claimed >= getPlan(o.planId).days
+export const isDeactivated = (o: Owned) => o.status === "deactivated"
 const tier = (o: Owned) => PLANS.findIndex((p) => p.id === o.planId)
 /** Running plans in tier order, the same order the Plans screen lists them. */
-export const active = (s: State) => s.owned.filter((o) => !isDone(o)).sort((a, b) => tier(a) - tier(b))
-export const completed = (s: State) => s.owned.filter(isDone)
+export const active = (s: State) =>
+  s.owned.filter((o) => !isDone(o) && !isDeactivated(o)).sort((a, b) => tier(a) - tier(b))
+export const completed = (s: State) => s.owned.filter((o) => isDone(o) && !isDeactivated(o))
+export const deactivated = (s: State) => s.owned.filter(isDeactivated)
 
 /** Whether user has at least one active or purchased paid plan (required for withdrawal) */
 export function hasBoughtPaidPlan(s: State): boolean {
-  return s.owned.some((o) => o.planId !== "free")
+  return s.owned.some((o) => o.planId !== "free" && !isDeactivated(o))
 }
 
 /** When this plan pays next, or null once all its days are claimed.
@@ -202,7 +206,7 @@ export function hasBoughtPaidPlan(s: State): boolean {
  * Subsequent days: Ready at start of the next calendar day (midnight 00:00:00).
  */
 export function nextClaimAt(o: Owned): number | null {
-  if (isDone(o)) return null
+  if (isDone(o) || isDeactivated(o)) return null
   if (o.lastClaimAt === null) return o.boughtAt
   const d = new Date(o.lastClaimAt)
   d.setHours(24, 0, 0, 0)
@@ -211,7 +215,7 @@ export function nextClaimAt(o: Owned): number | null {
 
 export const ready = (s: State, now: number) =>
   s.owned.filter((o) => {
-    if (isDone(o)) return false
+    if (isDone(o) || isDeactivated(o)) return false
     const at = nextClaimAt(o)
     return at !== null && now >= at
   })
@@ -371,24 +375,23 @@ export function invite(s: State, now: number): State {
 
 export function newPlayer(name: string, now: number, invitedBy?: string): State {
   const code = `${name.replace(/[^a-z]/gi, "").slice(0, 5).toUpperCase() || "PLAYER"}${(now % 900) + 100}`
-  return credit(
-    { name, coins: 0, lifetime: 0, owned: [], history: [], streak: 0, bestStreak: 0, lastClaimDay: null, inviteCode: code, invites: 0, skew: 0, invitedBy },
-    { id: uid(now), at: now, coins: WELCOME_GIFT, kind: "welcome" },
-  )
+  return {
+    name,
+    coins: 0,
+    lifetime: 0,
+    owned: [],
+    history: [],
+    streak: 0,
+    bestStreak: 0,
+    lastClaimDay: null,
+    inviteCode: code,
+    invites: 0,
+    skew: 0,
+    invitedBy,
+  }
 }
 
-/**
- * A believable two-week-old player, built by playing the real rules:
- * one running plan, one missed day, one invite, and 59 coins ready today.
- */
+/** Clean initial state for new / unauthenticated visitors */
 export function demoPlayer(now: number): State {
-  // ponytail: claims land at the same clock time each day; a load in the first minute after midnight sees yesterday as a gap
-  const at = (d: number) => now + d * DAY_MS - 60_000
-  let s = activatePlan(newPlayer("Rahul", at(-14)), "solar_300", at(-14))
-  for (let d = -14; d < 0; d++) {
-    if (d === -4) continue // a missed day: the streak starts over
-    s = collect(s, at(d))
-    if (d === -9) s = invite(s, at(d))
-  }
-  return s
+  return newPlayer("Player", now)
 }

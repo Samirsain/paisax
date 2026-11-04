@@ -33,7 +33,9 @@ export async function GET() {
     `.catch(() => [undefined])
 
     if (!user) {
-      return NextResponse.json({ authenticated: false })
+      // User wiped from DB — force logout
+      cookieStore.delete("paisax_uid")
+      return NextResponse.json({ authenticated: false, forceLogout: true })
     }
 
     // 2. Active Reconcile: Check any recent PENDING orders with AeroPay live
@@ -82,6 +84,10 @@ export async function GET() {
     let stateModified = false
 
     // 5. Ensure all confirmed plan purchases exist in serverState.owned
+    // AND strip any paid plans NOT backed by real orders
+    const confirmedOrderIds = new Set(orders.filter((o: any) => o.plan_id !== "recharge").map((o: any) => o.id))
+    const confirmedPlanIds = new Set(orders.filter((o: any) => o.plan_id !== "recharge").map((o: any) => o.plan_id))
+
     if (orders.length > 0) {
       for (const order of orders) {
         if (order.plan_id !== "recharge") {
@@ -108,6 +114,17 @@ export async function GET() {
           }
         }
       }
+    }
+
+    // Strip any paid plans from owned that are NOT backed by a real DB order
+    const beforeCount = serverState.owned.length
+    serverState.owned = serverState.owned.filter((o: any) => {
+      if (!o || !o.planId) return false
+      if (o.planId === "free") return true
+      return confirmedOrderIds.has(o.id) || confirmedPlanIds.has(o.planId)
+    })
+    if (serverState.owned.length !== beforeCount) {
+      stateModified = true
     }
 
     // 6. Active Reconcile: Ensure all referral commissions are in serverState.history and credited to wallet
@@ -254,25 +271,17 @@ export async function POST(req: NextRequest) {
     const confirmedOrderIds = new Set(confirmedOrders.map((o: any) => o.id))
     const confirmedPlanIds = new Set(confirmedOrders.map((o: any) => o.plan_id))
 
-    // 3. Sanitize owned plans: Keep valid plans (free, order-backed, server-persisted, or history-backed)
+    // 3. Sanitize owned plans: ONLY keep plans backed by actual database orders or free plan
     const rawOwned = Array.isArray(state.owned) ? state.owned : []
-    const serverOwnedIds = new Set((Array.isArray(currentServerState.owned) ? currentServerState.owned : []).map((o: any) => o?.id))
-    const serverHistoryPlans = new Set(
-      (Array.isArray(currentServerState.history) ? currentServerState.history : [])
-        .filter((h: any) => h?.kind === "buy" && h?.planId)
-        .map((h: any) => h.planId)
-    )
 
     const sanitizedOwned = rawOwned.filter((o: any) => {
       if (!o || typeof o !== "object") return false
-      // Free trial plan is always allowed
+      // Free trial plan is always allowed (1 per user)
       if (o.planId === "free") return true
-      // Match by order ID, confirmed plan ID, server-persisted plan ID, or history-backed purchase
+      // Paid plans MUST be backed by a confirmed order in the database
       return (
         confirmedOrderIds.has(o.id) ||
-        confirmedPlanIds.has(o.planId) ||
-        serverOwnedIds.has(o.id) ||
-        serverHistoryPlans.has(o.planId)
+        confirmedPlanIds.has(o.planId)
       )
     })
 

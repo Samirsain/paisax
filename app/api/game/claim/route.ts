@@ -56,7 +56,15 @@ export async function POST(req: NextRequest) {
     for (const o of candidates) {
       const plan = getPlan(o.planId)
 
-      // A. Check cycle expiration
+      // A. Check if plan has been deactivated by admin
+      if (o.status === "deactivated") {
+        if (!claimAll && planInstanceId === o.id) {
+          return NextResponse.json({ error: `This ${plan.name} has been deactivated by administrator.` }, { status: 400 })
+        }
+        continue
+      }
+
+      // B. Check cycle expiration
       if (isDone(o) || o.claimed >= plan.days) {
         if (!claimAll && planInstanceId === o.id) {
           return NextResponse.json({ error: `This ${plan.name} has completed its full ${plan.days}-day cycle.` }, { status: 400 })

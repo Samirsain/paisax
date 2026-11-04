@@ -36,6 +36,7 @@ import {
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { sendTestNotification } from "@/lib/notifications"
+import { PLANS, type PlanId } from "@/lib/game"
 
 interface OwnedPlanDetail {
   id?: string
@@ -47,6 +48,7 @@ interface OwnedPlanDetail {
   totalReturn: number
   claimed: number
   boughtAt?: number
+  status?: "active" | "deactivated"
 }
 
 interface UserItem {
@@ -221,6 +223,85 @@ export default function AdminPage() {
   const [actionNote, setActionNote] = useState("")
   const [actionRefund, setActionRefund] = useState(true)
   const [actionSubmitting, setActionSubmitting] = useState(false)
+
+  // Plan activation & deactivation modal state
+  const [selectedPlanUser, setSelectedPlanUser] = useState<UserItem | null>(null)
+  const [selectedNewPlanId, setSelectedNewPlanId] = useState<string>("solar_300")
+  const [planActionLoading, setPlanActionLoading] = useState(false)
+
+  function openPlanModal(user: UserItem) {
+    setSelectedPlanUser(user)
+    setSelectedNewPlanId("solar_300")
+  }
+
+  async function handleTogglePlan(userId: string, planInstanceId: string, action: "activate" | "deactivate" | "delete") {
+    const actionLabel = action === "deactivate" ? "deactivate" : action === "activate" ? "activate" : "delete"
+    if (!confirm(`Are you sure you want to ${actionLabel} this plan?`)) return
+
+    setPlanActionLoading(true)
+    try {
+      const res = await fetch("/api/admin/plans", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, planInstanceId, action }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || `Failed to ${action} plan`)
+
+      toast.success(result.message || `Plan ${actionLabel}d successfully`)
+      await loadData()
+
+      setSelectedPlanUser((prev) => {
+        if (!prev || prev.id !== userId) return prev
+        const updatedPlans = (prev.ownedPlans || [])
+          .map((p) => {
+            if (p.id === planInstanceId || p.planId === planInstanceId) {
+              return { ...p, status: action === "deactivate" ? "deactivated" : "active" as any }
+            }
+            return p
+          })
+          .filter((p) => action !== "delete" || (p.id !== planInstanceId && p.planId !== planInstanceId))
+        return { ...prev, ownedPlans: updatedPlans }
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update plan status"
+      toast.error(msg)
+    } finally {
+      setPlanActionLoading(false)
+    }
+  }
+
+  async function handleActivateNewPlan() {
+    if (!selectedPlanUser || !selectedNewPlanId) return
+    setPlanActionLoading(true)
+    try {
+      const res = await fetch("/api/admin/plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedPlanUser.id, planId: selectedNewPlanId }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || "Failed to activate plan")
+
+      toast.success(result.message || "Plan activated successfully!")
+      await loadData()
+
+      setSelectedPlanUser((prev) => {
+        if (!prev) return null
+        return {
+          ...prev,
+          hasPaidPlan: true,
+          paidPlansCount: (prev.paidPlansCount || 0) + 1,
+          ownedPlans: [...(prev.ownedPlans || []), result.plan],
+        }
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to activate plan"
+      toast.error(msg)
+    } finally {
+      setPlanActionLoading(false)
+    }
+  }
 
   // Check auth on load
   useEffect(() => {
@@ -1156,13 +1237,24 @@ export default function AdminPage() {
                             })}
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <a
-                              href={`tel:${u.phone}`}
-                              className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2 py-1 text-[11px] font-bold text-slate-300 hover:bg-slate-700 hover:text-white"
-                            >
-                              <PhoneIcon className="size-3" />
-                              <span>Call</span>
-                            </a>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => openPlanModal(u)}
+                                title="Activate or Deactivate Plans"
+                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500/20 border border-amber-500/40 px-2 py-1 text-[11px] font-bold text-amber-300 hover:bg-amber-500/30 transition-all cursor-pointer"
+                              >
+                                <ZapIcon className="size-3" />
+                                <span>Plans</span>
+                              </button>
+                              <a
+                                href={`tel:${u.phone}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2 py-1 text-[11px] font-bold text-slate-300 hover:bg-slate-700 hover:text-white"
+                              >
+                                <PhoneIcon className="size-3" />
+                                <span>Call</span>
+                              </a>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1253,7 +1345,19 @@ export default function AdminPage() {
                             >
                               <div className="flex items-start justify-between gap-1">
                                 <div>
-                                  <p className="font-bold text-white text-xs">{p.planName}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="font-bold text-white text-xs">{p.planName}</p>
+                                    <span
+                                      className={cn(
+                                        "rounded-md px-1.5 py-0.5 text-[9px] font-black border uppercase",
+                                        p.status === "deactivated"
+                                          ? "bg-red-500/20 text-red-400 border-red-500/40"
+                                          : "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                      )}
+                                    >
+                                      {p.status === "deactivated" ? "Deactivated" : "Active"}
+                                    </span>
+                                  </div>
                                   <p className="text-[10px] text-slate-400">
                                     {p.days || 60} Days Plan • Return: ₹{(p.totalReturn || (p.perDay * (p.days || 60))).toLocaleString("en-IN")}
                                   </p>
@@ -1270,6 +1374,34 @@ export default function AdminPage() {
                                 <span className="font-mono text-slate-400 text-[10px]">
                                   Day {p.claimed} / {p.days || 60}
                                 </span>
+                              </div>
+
+                              {/* Toggle active / deactivated button */}
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-800/40">
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  ID: {p.id ? p.id.slice(-8) : p.planId}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {p.status === "deactivated" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTogglePlan(u.userId, p.id || p.planId, "activate")}
+                                      disabled={planActionLoading}
+                                      className="rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold text-emerald-300 cursor-pointer disabled:opacity-50"
+                                    >
+                                      Reactivate Plan
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTogglePlan(u.userId, p.id || p.planId, "deactivate")}
+                                      disabled={planActionLoading}
+                                      className="rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 px-2 py-0.5 text-[10px] font-bold text-red-300 cursor-pointer disabled:opacity-50"
+                                    >
+                                      Deactivate Plan
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
                               {p.boughtAt && (
@@ -2705,6 +2837,159 @@ export default function AdminPage() {
                   "Confirm Rejection"
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── USER PLAN MANAGEMENT MODAL (Activate / Deactivate Plans) ── */}
+      {selectedPlanUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-[#0f172a] p-6 shadow-2xl border border-slate-700 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <ZapIcon className="size-5 text-amber-400" />
+                  <span>Manage Plans for User</span>
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  <strong className="text-white">{selectedPlanUser.name}</strong> ·{" "}
+                  <span className="font-mono text-amber-300">{selectedPlanUser.phone}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPlanUser(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Current Owned Plans */}
+            <div className="mt-4">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                Current Active & Owned Plans ({selectedPlanUser.ownedPlans?.length || 0}):
+              </h4>
+
+              {selectedPlanUser.ownedPlans && selectedPlanUser.ownedPlans.length > 0 ? (
+                <div className="space-y-2">
+                  {selectedPlanUser.ownedPlans.map((p, idx) => (
+                    <div
+                      key={p.id || idx}
+                      className="rounded-2xl bg-slate-900/90 border border-slate-800 p-3 text-xs flex items-center justify-between gap-2"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-white">{p.planName}</p>
+                          <span
+                            className={cn(
+                              "rounded-md px-1.5 py-0.5 text-[9px] font-black border uppercase",
+                              p.status === "deactivated"
+                                ? "bg-red-500/20 text-red-400 border-red-500/40"
+                                : "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                            )}
+                          >
+                            {p.status === "deactivated" ? "Deactivated" : "Active"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Cost: ₹{p.cost} · Daily: ₹{p.perDay}/day · Days: {p.claimed}/{p.days || 60}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {p.status === "deactivated" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlan(selectedPlanUser.id, p.id || p.planId, "activate")}
+                            disabled={planActionLoading}
+                            className="rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 px-2.5 py-1 text-xs font-bold text-emerald-300 cursor-pointer disabled:opacity-50"
+                          >
+                            Activate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlan(selectedPlanUser.id, p.id || p.planId, "deactivate")}
+                            disabled={planActionLoading}
+                            className="rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 px-2.5 py-1 text-xs font-bold text-red-300 cursor-pointer disabled:opacity-50"
+                          >
+                            Deactivate
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePlan(selectedPlanUser.id, p.id || p.planId, "delete")}
+                          disabled={planActionLoading}
+                          title="Delete Plan Permanently"
+                          className="rounded-xl bg-slate-800 hover:bg-red-950/60 border border-slate-700 hover:border-red-800 px-2 py-1 text-xs text-slate-400 hover:text-red-400 cursor-pointer disabled:opacity-50"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl bg-slate-900/60 border border-slate-800 p-4 text-center text-xs text-slate-500">
+                  No plans currently assigned to this user.
+                </div>
+              )}
+            </div>
+
+            {/* Activate New Plan Form */}
+            <div className="mt-5 pt-4 border-t border-slate-800">
+              <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <PlusIcon className="size-3.5" />
+                <span>Assign / Activate New Plan</span>
+              </h4>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                    Select Plan to Activate
+                  </label>
+                  <select
+                    value={selectedNewPlanId}
+                    onChange={(e) => setSelectedNewPlanId(e.target.value)}
+                    className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-amber-500 cursor-pointer"
+                  >
+                    {PLANS.map((pl) => (
+                      <option key={pl.id} value={pl.id}>
+                        {pl.name} (Cost: ₹{pl.cost} | ₹{pl.perDay}/day | {pl.days} Days)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-2.5 text-[11px] text-amber-300">
+                  ⚡ Activating this plan will immediately grant the user daily rewards in their dashboard. An audit entry is recorded in the orders table.
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPlanUser(null)}
+                    className="rounded-xl bg-slate-800 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleActivateNewPlan}
+                    disabled={planActionLoading}
+                    className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-2 text-xs font-black text-slate-950 shadow-md hover:from-amber-400 hover:to-amber-500 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {planActionLoading ? (
+                      <RefreshCwIcon className="size-3.5 animate-spin" />
+                    ) : (
+                      <ZapIcon className="size-3.5" />
+                    )}
+                    <span>Activate Plan for User</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
