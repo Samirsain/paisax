@@ -164,14 +164,36 @@ export async function GET(req: NextRequest) {
       const walletSummary = userSummaryMap.get(u.id)
       const userCoins = typeof walletSummary?.availableBalance === "number" ? walletSummary.availableBalance : Number(state.coins ?? 0)
       const owned = Array.isArray(state.owned) ? state.owned : []
-      const paidOwned = owned.filter((o: any) => o?.planId && o.planId !== "free")
+      const history = Array.isArray(state.history) ? state.history : []
+      const paidHistoryBuys = history.filter((h: any) => h && h.kind === "buy" && h.planId && h.planId !== "free")
+      
+      // Combine state.owned with any paid plans found in state.history that aren't already in owned
+      const allOwnedAndHistoryPlans = [...owned]
+      for (const b of paidHistoryBuys) {
+        const bId = b.id || `buy_${b.planId}_${b.at}`
+        const alreadyHas = allOwnedAndHistoryPlans.some(
+          (o: any) => o.id === b.id || (o.planId === b.planId && Math.abs((o.boughtAt || 0) - (b.at || 0)) < 10000)
+        )
+        if (!alreadyHas) {
+          const claims = history.filter((h: any) => h && h.kind === "claim" && h.planId === b.planId)
+          allOwnedAndHistoryPlans.push({
+            id: bId,
+            planId: b.planId,
+            claimed: claims.length,
+            boughtAt: b.at || Date.now(),
+            lastClaimAt: null,
+          })
+        }
+      }
+
+      const paidOwned = allOwnedAndHistoryPlans.filter((o: any) => o?.planId && o.planId !== "free")
       const userOrders = ordersRows.filter((o: any) => o.user_id === u.id)
       const successfulOrders = userOrders.filter((o: any) => o.status === "SUCCESS")
       const totalDepositsAmount = successfulOrders.reduce((sum: number, o: any) => sum + (Number(o.amount) || 0), 0)
 
       const hasPaid = paidOwned.length > 0 || successfulOrders.length > 0
 
-      const enrichedOwnedPlans = owned.map((o: any) => {
+      const enrichedOwnedPlans = allOwnedAndHistoryPlans.map((o: any) => {
         const p = getPlan(o.planId as PlanId)
         return {
           id: o.id || `${o.planId}_${o.boughtAt}`,

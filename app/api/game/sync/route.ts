@@ -254,14 +254,26 @@ export async function POST(req: NextRequest) {
     const confirmedOrderIds = new Set(confirmedOrders.map((o: any) => o.id))
     const confirmedPlanIds = new Set(confirmedOrders.map((o: any) => o.plan_id))
 
-    // 3. Sanitize owned plans: A paid plan CANNOT exist without a confirmed order in DB!
+    // 3. Sanitize owned plans: Keep valid plans (free, order-backed, server-persisted, or history-backed)
     const rawOwned = Array.isArray(state.owned) ? state.owned : []
+    const serverOwnedIds = new Set((Array.isArray(currentServerState.owned) ? currentServerState.owned : []).map((o: any) => o?.id))
+    const serverHistoryPlans = new Set(
+      (Array.isArray(currentServerState.history) ? currentServerState.history : [])
+        .filter((h: any) => h?.kind === "buy" && h?.planId)
+        .map((h: any) => h.planId)
+    )
+
     const sanitizedOwned = rawOwned.filter((o: any) => {
       if (!o || typeof o !== "object") return false
       // Free trial plan is always allowed
       if (o.planId === "free") return true
-      // Match by order ID or confirmed plan ID
-      return confirmedOrderIds.has(o.id) || confirmedPlanIds.has(o.planId)
+      // Match by order ID, confirmed plan ID, server-persisted plan ID, or history-backed purchase
+      return (
+        confirmedOrderIds.has(o.id) ||
+        confirmedPlanIds.has(o.planId) ||
+        serverOwnedIds.has(o.id) ||
+        serverHistoryPlans.has(o.planId)
+      )
     })
 
     // 4. Merge history to ensure server-side commissions, gift cards, and withdrawals are never lost
