@@ -288,10 +288,11 @@ export default function AdminPage() {
 
       setSelectedPlanUser((prev) => {
         if (!prev) return null
+        const isPaid = selectedNewPlanId !== "free"
         return {
           ...prev,
-          hasPaidPlan: true,
-          paidPlansCount: (prev.paidPlansCount || 0) + 1,
+          hasPaidPlan: isPaid ? true : prev.hasPaidPlan,
+          paidPlansCount: isPaid ? (prev.paidPlansCount || 0) + 1 : prev.paidPlansCount,
           ownedPlans: [...(prev.ownedPlans || []), result.plan],
         }
       })

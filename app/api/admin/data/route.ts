@@ -168,13 +168,14 @@ export async function GET(req: NextRequest) {
       const walletSummary = userSummaryMap.get(u.id)
       const userCoins = typeof walletSummary?.availableBalance === "number" ? walletSummary.availableBalance : Number(state.coins ?? 0)
       const owned = Array.isArray(state.owned) ? state.owned : []
-      const userOrders = ordersRows.filter((o: any) => o.user_id === u.id)
+      // Deposits & orders strictly exclude ₹0 Free trial plans
+      const userOrders = ordersRows.filter((o: any) => o.user_id === u.id && o.plan_id !== "free" && Number(o.amount) > 0)
       const successfulOrders = userOrders.filter((o: any) => o.status === "SUCCESS")
       const totalDepositsAmount = successfulOrders.reduce((sum: number, o: any) => sum + (Number(o.amount) || 0), 0)
 
       // Verified plans: Free trial OR strictly backed by confirmed successful order in DB
-      const confirmedPlanIds = new Set(successfulOrders.filter((o: any) => o.plan_id !== "recharge").map((o: any) => o.plan_id))
-      const confirmedOrderIds = new Set(successfulOrders.filter((o: any) => o.plan_id !== "recharge").map((o: any) => o.id))
+      const confirmedPlanIds = new Set(successfulOrders.filter((o: any) => o.plan_id !== "recharge" && o.plan_id !== "free").map((o: any) => o.plan_id))
+      const confirmedOrderIds = new Set(successfulOrders.filter((o: any) => o.plan_id !== "recharge" && o.plan_id !== "free").map((o: any) => o.id))
 
       const verifiedPlans = owned.filter((o: any) => {
         if (!o || !o.planId) return false
@@ -182,8 +183,9 @@ export async function GET(req: NextRequest) {
         return confirmedOrderIds.has(o.id) || confirmedPlanIds.has(o.planId)
       })
 
-      const paidOwned = verifiedPlans.filter((o: any) => o.planId !== "free")
-      const hasPaid = paidOwned.length > 0 || successfulOrders.some((o: any) => o.plan_id !== "recharge")
+      // Paid plans: Strictly paid plans (planId !== "free" AND cost > 0)
+      const paidOwned = verifiedPlans.filter((o: any) => o.planId !== "free" && (getPlan(o.planId as PlanId)?.cost || 0) > 0)
+      const hasPaid = paidOwned.length > 0 || successfulOrders.some((o: any) => o.plan_id !== "recharge" && o.plan_id !== "free" && Number(o.amount) > 0)
 
       const enrichedOwnedPlans = verifiedPlans.map((o: any) => {
         const p = getPlan(o.planId as PlanId)
@@ -220,7 +222,7 @@ export async function GET(req: NextRequest) {
         referralBalance: walletSummary?.referralAvailableBalance ?? 0,
         lifetime: walletSummary ? Math.max(Number(state.lifetime ?? 0), walletSummary.totalEarned) : Number(state.lifetime ?? 0),
         hasPaidPlan: hasPaid,
-        paidPlansCount: paidOwned.length || successfulOrders.length,
+        paidPlansCount: paidOwned.length,
         totalDepositsAmount,
         successfulOrdersCount: successfulOrders.length,
         totalOrdersCount: userOrders.length,
@@ -241,18 +243,18 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // Users with paid plans (either from successful orders or owned paid plans)
+    // Users with paid plans (strictly real paid investments > 0)
     const paidUsersMap = new Map<string, any>()
 
     for (const u of users) {
       if (u.hasPaidPlan) {
-        // Collect all paid plans from ownedPlans
-        const paidPlans = u.ownedPlans.filter((p: any) => p.planId !== "free")
+        // Collect all paid plans from ownedPlans (excluding free plan)
+        const paidPlans = u.ownedPlans.filter((p: any) => p.planId !== "free" && p.cost > 0)
 
         // If user has successful orders not already in ownedPlans, add them
         const existingIds = new Set(paidPlans.map((p: any) => p.id))
         for (const so of u.successfulOrders) {
-          if (!existingIds.has(so.id) && so.planId !== "free" && so.planId !== "recharge") {
+          if (!existingIds.has(so.id) && so.planId !== "free" && so.planId !== "recharge" && so.amount > 0) {
             const p = getPlan(so.planId as PlanId)
             paidPlans.push({
               id: so.id,
@@ -268,36 +270,40 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        paidUsersMap.set(u.id, {
-          userId: u.id,
-          name: u.name,
-          phone: u.phone,
-          inviteCode: u.inviteCode,
-          invitedBy: u.invitedBy,
-          inviterName: u.inviterName,
-          inviterPhone: u.inviterPhone,
-          directInvitesCount: u.directInvitesCount,
-          totalCommissionEarned: u.totalCommissionEarned,
-          createdAt: u.createdAt,
-          coins: u.coins,
-          totalDeposits: u.totalDepositsAmount,
-          depositCount: u.successfulOrdersCount,
-          bankAccountName: u.bankAccountName,
-          bankAccountNumber: u.bankAccountNumber,
-          bankName: u.bankName,
-          bankIfsc: u.bankIfsc,
-          ownedPlans: paidPlans,
-          successfulOrders: u.successfulOrders,
-        })
+        // Only include in Paid Plan Users list if they actually have a paid plan or paid deposit
+        if (paidPlans.length > 0 || u.totalDepositsAmount > 0) {
+          paidUsersMap.set(u.id, {
+            userId: u.id,
+            name: u.name,
+            phone: u.phone,
+            inviteCode: u.inviteCode,
+            invitedBy: u.invitedBy,
+            inviterName: u.inviterName,
+            inviterPhone: u.inviterPhone,
+            directInvitesCount: u.directInvitesCount,
+            totalCommissionEarned: u.totalCommissionEarned,
+            createdAt: u.createdAt,
+            coins: u.coins,
+            totalDeposits: u.totalDepositsAmount,
+            depositCount: u.successfulOrdersCount,
+            bankAccountName: u.bankAccountName,
+            bankAccountNumber: u.bankAccountNumber,
+            bankName: u.bankName,
+            bankIfsc: u.bankIfsc,
+            ownedPlans: paidPlans,
+            successfulOrders: u.successfulOrders,
+          })
+        }
       }
     }
 
     const paidUsersList = Array.from(paidUsersMap.values())
 
-    // Overall KPI Stats
+    // Overall KPI Stats (strictly paid deposits, excluding ₹0 free plans)
     const totalUsers = users.length
     const paidUsersCount = paidUsersList.length
-    const successfulOrdersList = ordersRows.filter((o: any) => o.status === "SUCCESS")
+    const realPaidOrders = ordersRows.filter((o: any) => o.plan_id !== "free" && Number(o.amount) > 0)
+    const successfulOrdersList = realPaidOrders.filter((o: any) => o.status === "SUCCESS")
     const totalDeposits = successfulOrdersList.reduce((sum: number, o: any) => sum + (Number(o.amount) || 0), 0)
     const totalDepositsCount = successfulOrdersList.length
 
@@ -328,7 +334,7 @@ export async function GET(req: NextRequest) {
         totalReferralBalance,
         totalDeposits,
         totalDepositsCount,
-        totalOrdersCount: ordersRows.length,
+        totalOrdersCount: realPaidOrders.length,
         pendingWithdrawalsCount: pendingWithdrawals.length,
         pendingWithdrawalsAmount,
         approvedWithdrawalsCount: approvedWithdrawals.length,
@@ -339,7 +345,7 @@ export async function GET(req: NextRequest) {
       },
       users,
       paidUsers: paidUsersList,
-      orders: ordersRows.map((o: any) => ({
+      orders: realPaidOrders.map((o: any) => ({
         id: o.id,
         userId: o.user_id,
         userName: o.user_name,

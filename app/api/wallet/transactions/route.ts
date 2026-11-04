@@ -82,8 +82,9 @@ export async function GET() {
       meta?: any
     }> = []
 
-    // Map orders
+    // Map orders (strictly exclude ₹0 Free trial plans)
     for (const o of orders) {
+      if (o.plan_id === "free" || Number(o.amount) <= 0) continue
       const isRecharge = o.plan_id === "recharge"
       const isWalletBuy = o.txn_id === "WALLET_BALANCE"
       const status = (o.status || "PENDING").toUpperCase() as any
