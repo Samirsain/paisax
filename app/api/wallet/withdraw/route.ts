@@ -230,8 +230,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Strict Business Rule: User MUST have at least one active paid plan (cost > 0) to withdraw!
-    // Free trial users cannot withdraw without purchasing a paid plan.
+    // Check if user has paid plan — if not, flag it (but still allow withdrawal)
     const confirmedPaidOrders = await db`
       SELECT id FROM orders
       WHERE user_id = ${uid}
@@ -245,16 +244,7 @@ export async function POST(req: NextRequest) {
     const userOwnedPaidPlan = Array.isArray(summary.state?.owned) && summary.state.owned.some(
       (o: any) => o && o.planId !== "free" && o.status !== "deactivated"
     )
-
-    if (confirmedPaidOrders.length === 0 && !userOwnedPaidPlan) {
-      return NextResponse.json(
-        {
-          error: "Withdrawals are restricted to investors. Please purchase at least one active solar plan to unlock bank withdrawals.",
-          requiresPaidPlan: true,
-        },
-        { status: 403 }
-      )
-    }
+    const hasPaidPlan = confirmedPaidOrders.length > 0 || Boolean(userOwnedPaidPlan)
 
     // Authoritative balance check based on chosen balanceType
     const availableForType =
@@ -341,6 +331,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      hasPaidPlan,
       withdrawal: {
         id: withdrawId,
         amount,

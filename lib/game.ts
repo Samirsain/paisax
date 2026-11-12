@@ -26,10 +26,10 @@ export const PLANS: Plan[] = [
     id: "free",
     name: "Free Solar Trial Plan (₹0)",
     tag: "Free Trial",
-    blurb: "Bina kisi payment ke turant shuru kare! Har din ₹10 free direct reward paye.",
+    blurb: "Bina kisi payment ke turant shuru kare! 4 din me ₹200 free direct reward paye.",
     cost: 0,
-    perDay: 10,
-    days: 30,
+    perDay: 50,
+    days: 4,
     category: "normal",
     limit: "Limit 1/1",
     image: "/dairymilk/solar_panel.jpg",
@@ -260,7 +260,7 @@ const credit = (s: State, entry: Entry): State => ({
  * STRICT RULES:
  * 1. Plan claim pays EXACTLY the plan's daily return (plan.perDay). Neither more nor less!
  * 2. Plan can only be claimed up to its full duration (plan.days, e.g. 75 days for 75-day plans).
- * 3. Free plan pays EXACTLY ₹10.
+ * 3. Free plan pays EXACTLY ₹50 for 4 days (₹200 total).
  */
 export function collect(s: State, now: number, onlyId?: string): State {
   const due = ready(s, now).filter((o) => !onlyId || o.id === onlyId)

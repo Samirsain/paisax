@@ -179,7 +179,6 @@ export default function WithdrawPage() {
   const netPayout = Math.max(0, amt - fee)
 
   const isFormValid =
-    isPaidInvestor &&
     today &&
     amt >= WITHDRAW_MIN &&
     amt <= available &&
@@ -266,10 +265,6 @@ export default function WithdrawPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!isPaidInvestor) {
-      setError("Bank withdrawals require at least one active paid solar investment plan. Please upgrade to unlock.")
-      return
-    }
     if (!today) {
       setError(`Withdrawals are closed on weekends (${dayName}). Please request on Monday.`)
       return
@@ -514,6 +509,33 @@ export default function WithdrawPage() {
             <span>Bank details saved for automatic 1-click next withdrawal</span>
           </div>
 
+          {/* Deposit Prompt for Free Trial Users */}
+          {!isPaidInvestor && (
+            <div className="mt-4 rounded-2xl bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 p-4 border border-amber-300 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-amber-100 border border-amber-300 shrink-0">
+                  <BanknoteIcon className="size-5 text-amber-700" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-black text-amber-950">
+                    💡 First Deposit → Then Withdraw Faster!
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                    Invest in a <strong>paid solar plan</strong> to earn higher daily returns and get <strong>priority bank transfers</strong> with faster processing.
+                  </p>
+                  <Link
+                    href="/plans"
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-[11px] font-black text-white shadow-sm active:scale-95 transition-all"
+                  >
+                    <SparklesIcon className="size-3.5" />
+                    <span>Invest Now — View Plans</span>
+                    <ArrowRightIcon className="size-3" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -545,43 +567,42 @@ export default function WithdrawPage() {
               "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold border",
               isPaidInvestor
                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : "bg-red-50 text-red-700 border-red-200"
+                : "bg-amber-50 text-amber-700 border-amber-200"
             )}>
               {isPaidInvestor ? (
                 <>
                   <CheckCircle2Icon className="size-3 text-emerald-600" />
-                  <span>Unlocked</span>
+                  <span>Priority</span>
                 </>
               ) : (
                 <>
-                  <LockIcon className="size-3 text-red-500" />
-                  <span>Locked</span>
+                  <InfoIcon className="size-3 text-amber-500" />
+                  <span>Free Trial</span>
                 </>
               )}
             </span>
           </div>
 
-          {/* ── PAID PLAN REQUIRED LOCK BANNER ────────────────────── */}
+          {/* ── DEPOSIT FIRST PROMPT FOR FREE USERS ────────────────── */}
           {!isPaidInvestor && (
             <div className="mt-3 rounded-2xl bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 p-4 border border-amber-300/80 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="flex size-10 items-center justify-center rounded-xl bg-amber-100 border border-amber-300 shrink-0">
-                  <LockIcon className="size-5 text-amber-700" />
+                  <BanknoteIcon className="size-5 text-amber-700" />
                 </div>
                 <div className="flex-1">
                   <p className="text-xs font-black text-amber-950">
-                    Withdrawals Locked — Paid Plan Required
+                    💡 First Deposit → Then Withdraw!
                   </p>
                   <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">
-                    Bank withdrawals are exclusively available for active solar investors.
-                    Purchase at least <strong>1 paid solar plan</strong> to permanently unlock instant bank transfers.
+                    Invest in a <strong>paid solar plan</strong> to earn higher daily returns and get <strong>priority withdrawals</strong> with faster bank processing.
                   </p>
                   <Link
                     href="/plans"
                     className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-[11px] font-black text-white shadow-sm active:scale-95 transition-all"
                   >
                     <SparklesIcon className="size-3.5" />
-                    <span>View Investment Plans</span>
+                    <span>Invest Now — View Plans</span>
                     <ArrowRightIcon className="size-3" />
                   </Link>
                 </div>
@@ -897,8 +918,6 @@ export default function WithdrawPage() {
           >
             {loading
               ? "Processing Bank Request..."
-              : !isPaidInvestor
-              ? "🔒 Upgrade to Paid Plan to Withdraw"
               : !today
               ? "Withdrawals Closed on Weekends"
               : available < WITHDRAW_MIN
