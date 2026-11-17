@@ -1,9 +1,9 @@
 "use client"
 
 import React from "react"
-import { ArrowRightIcon, ShieldCheckIcon, Gift } from "lucide-react"
+import { ArrowRightIcon, ShieldCheckIcon } from "lucide-react"
 
-// ── OFFICIAL PHONEPE SVG (ICON ONLY) ────────────────────────────────────────────
+// ── PHONEPE ICON ────────────────────────────────────────────────────────────────
 export function PhonePeLogo({ className = "size-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" fillRule="evenodd" clipRule="evenodd" strokeLinejoin="round" strokeMiterlimit={2} className={className}>
@@ -13,7 +13,7 @@ export function PhonePeLogo({ className = "size-4" }: { className?: string }) {
   )
 }
 
-// ── OFFICIAL PAYTM SVG (LOGOTYPE ONLY) ──────────────────────────────────────────
+// ── PAYTM LOGOTYPE ──────────────────────────────────────────────────────────────
 export function PaytmLogo({ className = "h-3 w-auto" }: { className?: string }) {
   return (
     <svg viewBox="0 0 122.88 38.52" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -25,7 +25,7 @@ export function PaytmLogo({ className = "h-3 w-auto" }: { className?: string }) 
   )
 }
 
-// ── OFFICIAL GOOGLE PAY SVG (ICON ONLY) ─────────────────────────────────────────
+// ── GOOGLE PAY ICON ─────────────────────────────────────────────────────────────
 export function GooglePayLogo({ className = "h-3.5 w-auto" }: { className?: string }) {
   return (
     <svg viewBox="0 0 123.84 104.9" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -37,7 +37,7 @@ export function GooglePayLogo({ className = "h-3.5 w-auto" }: { className?: stri
   )
 }
 
-// ── OFFICIAL VISA SVG ───────────────────────────────────────────────────────────
+// ── VISA ICON ───────────────────────────────────────────────────────────────────
 export function VisaLogo({ className = "h-2.5 w-auto" }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 305.67" fillRule="evenodd" clipRule="evenodd" className={className}>
@@ -68,77 +68,52 @@ interface WelcomeBonusBannerProps {
   className?: string
 }
 
-const DAYS = [
-  { label: "Day 1", amount: "₹50" },
-  { label: "Day 2", amount: "₹50" },
-  { label: "Day 3", amount: "₹50" },
-  { label: "Day 4", amount: "₹50" },
-] as const
-
 export function WelcomeBonusBanner({
   variant = "hero",
   onSwitchToRegister,
   className = "",
 }: WelcomeBonusBannerProps) {
   return (
-    <div
-      className={`rounded-2xl bg-slate-900 p-3.5 text-white border border-slate-700/60 ${className}`}
-    >
-      {/* ── ROW 1: Title line ── */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <Gift className="size-3.5 text-emerald-400 shrink-0" />
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-              Welcome Bonus
-            </span>
-          </div>
-          <h2 className="text-xl font-extrabold text-white tracking-tight mt-0.5 leading-tight">
-            ₹200 <span className="text-emerald-400">FREE</span>
-          </h2>
+    <div className={`space-y-2 ${className}`}>
+      {/* ── BONUS CARD ── */}
+      <div className="rounded-2xl bg-[#FFFCF7] border border-amber-200/70 shadow-sm px-4 py-3.5">
+        {/* Top row: label + badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-amber-700/80 tracking-wide uppercase">
+            Free New User Gift
+          </span>
+          <span className="text-[10px] font-bold text-amber-600 bg-amber-100 rounded-full px-2 py-0.5">
+            100% FREE
+          </span>
         </div>
-        <span className="rounded-md bg-emerald-500/15 text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 border border-emerald-500/30 mt-0.5 shrink-0">
-          100% Free
-        </span>
+
+        {/* Main heading */}
+        <h2 className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-none">
+          ₹200 <span className="text-amber-500">Welcome Bonus</span>
+        </h2>
+
+        {/* Hindi subtitle */}
+        <p className="mt-1 text-xs text-slate-500 leading-snug">
+          Register करें और पाएं{" "}
+          <span className="text-slate-700 font-semibold">₹200 तक का Welcome Bonus</span>
+        </p>
       </div>
 
-      {/* ── ROW 2: Subtitle ── */}
-      <p className="text-[11px] text-slate-400 mt-1 leading-snug">
-        Register करें और पाएं <span className="text-white font-semibold">₹200 तक का Welcome Bonus</span>
-      </p>
-
-      {/* ── ROW 3: 4-day stepper ── */}
-      <div className="mt-2.5 grid grid-cols-4 gap-1">
-        {DAYS.map((d) => (
-          <div
-            key={d.label}
-            className="flex flex-col items-center rounded-lg bg-slate-800/80 border border-slate-700/50 py-1.5"
-          >
-            <span className="text-[9px] font-medium text-slate-500 uppercase tracking-wider leading-none">
-              {d.label}
-            </span>
-            <span className="text-sm font-bold text-white leading-tight mt-0.5">
-              {d.amount}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── ROW 4: Payout channels ── */}
-      <div className="mt-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-1 text-[10px] text-slate-500">
-          <ShieldCheckIcon className="size-3 text-emerald-500/70" />
+      {/* ── PAYOUT CHANNELS ROW ── */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-1 text-[10px] text-slate-400">
+          <ShieldCheckIcon className="size-3 text-emerald-500" />
           <span className="font-medium">Payouts via</span>
         </div>
         <SupportedPaymentBadges />
       </div>
 
-      {/* ── CTA (teaser only) ── */}
+      {/* ── CTA (teaser on login tab only) ── */}
       {variant === "teaser" && onSwitchToRegister && (
         <button
           type="button"
           onClick={onSwitchToRegister}
-          className="mt-3 w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 py-2 text-xs font-bold text-white shadow-sm transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-[0.98]"
+          className="w-full rounded-xl bg-amber-500 hover:bg-amber-600 py-2.5 text-xs font-bold text-white shadow-sm transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-[0.98]"
         >
           <span>Claim ₹200 Bonus</span>
           <ArrowRightIcon className="size-3.5" strokeWidth={2.5} />
