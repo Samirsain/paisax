@@ -228,6 +228,7 @@ export async function GET(req: NextRequest) {
         totalCommissionEarned,
         bonusDaysClaimed,
         bonusAmountClaimed,
+        lastClaimDay: state?.lastClaimDay ?? null,
         createdAt: u.created_at,
         coins: userCoins,
         mainBalance: walletSummary?.mainAvailableBalance ?? userCoins,
@@ -345,8 +346,7 @@ export async function GET(req: NextRequest) {
     let todayBonusClaimsAmount = 0
 
     for (const u of users) {
-      const gs = gameStatesByUserId.get(u.id)
-      if (gs && gs.lastClaimDay === todayDay) {
+      if (u.lastClaimDay === todayDay) {
         todayBonusClaimsCount += 1
         todayBonusClaimsAmount += 50
       }
