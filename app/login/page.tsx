@@ -5,7 +5,7 @@ import { useEffect, useState, Suspense } from "react"
 import Image from "next/image"
 import { ArrowRightIcon, EyeIcon, EyeOffIcon, LockIcon, PhoneIcon, UserIcon, GiftIcon, SunMediumIcon, SparklesIcon } from "lucide-react"
 import { useAuth } from "@/lib/auth"
-import { PhonePeLogo, PaytmLogo } from "@/components/registration-view"
+import { WelcomeBonusBanner } from "@/components/welcome-bonus-banner"
 
 // Very fine gold dust particles concentrated specifically along the lower energy trails
 const TRAIL_GOLD_DUST = [
@@ -342,7 +342,7 @@ function AuthForm() {
       </div>
 
       {/* Main Form Container */}
-      <div className="relative -mt-16 w-full max-w-[360px] px-4 z-10">
+      <div className="relative -mt-16 w-full max-w-[400px] px-3 sm:px-4 z-10">
         
         {/* Floating circular Solar logo badge matching logo.png */}
         <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-20">
@@ -358,7 +358,7 @@ function AuthForm() {
         </div>
 
         {/* Form Card */}
-        <div className="relative rounded-[32px] bg-white px-6 pt-14 pb-7 shadow-[0_25px_60px_-12px_rgba(0,0,0,0.92),0_0_40px_rgba(213,163,61,0.12)] border border-[#D5A33D]/20">
+        <div className="relative rounded-[32px] bg-white px-5 sm:px-6 pt-14 pb-7 shadow-[0_25px_60px_-12px_rgba(0,0,0,0.92),0_0_40px_rgba(213,163,61,0.12)] border border-[#D5A33D]/20">
           
           {/* Tabs: Login / Register with golden underline indicator */}
           <div className="flex items-center justify-around border-b border-amber-100 pb-3 mb-6">
@@ -470,46 +470,20 @@ function AuthForm() {
                 </button>
                 <span className="tracking-tighter">▪▪</span>
               </div>
+
+              {/* ── ATTRACTIVE ₹200 WELCOME BONUS TEASER ON LOGIN TAB ── */}
+              <WelcomeBonusBanner
+                variant="teaser"
+                onSwitchToRegister={() => { setTab("register"); setError("") }}
+                className="mt-3"
+              />
             </form>
           ) : (
             /* Register Form with ₹200 Free Welcome Bonus Banner & Paytm / PhonePe Logos */
             <form onSubmit={handleRegister} className="flex flex-col gap-3.5">
               
-              {/* ── ₹200 FREE WELCOME BONUS BANNER ── */}
-              <div className="rounded-2xl bg-gradient-to-b from-[#1c1206] via-[#2a1a08] to-[#120a03] p-3 text-center border border-amber-500/40 text-white relative overflow-hidden shadow-sm">
-                <div className="inline-flex items-center gap-1 rounded-full bg-amber-500/25 px-2.5 py-0.5 text-[9px] font-black text-amber-300 border border-amber-400/40 mb-1">
-                  <SparklesIcon className="size-2.5 text-yellow-300" />
-                  <span>Free New User Gift</span>
-                </div>
-                <div className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400">
-                  ₹200 FREE WELCOME BONUS
-                </div>
-                <p className="text-[11px] font-bold text-amber-100 mt-0.5 leading-snug">
-                  Register करें और पाएं <span className="text-yellow-300 font-extrabold">₹200 तक का Welcome Bonus</span>
-                </p>
-
-                {/* 4 Days roadmap */}
-                <div className="mt-2 grid grid-cols-4 gap-1 text-[9px] font-bold">
-                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
-                    Day 1: ₹50
-                  </div>
-                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
-                    Day 2: ₹50
-                  </div>
-                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
-                    Day 3: ₹50
-                  </div>
-                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
-                    Day 4: ₹50
-                  </div>
-                </div>
-
-                {/* Paytm & PhonePe Logos */}
-                <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-center gap-2">
-                  <PhonePeLogo className="h-5 w-auto" />
-                  <PaytmLogo className="h-5 w-auto" />
-                </div>
-              </div>
+              {/* ── ₹200 FREE WELCOME BONUS BANNER ON REGISTER TAB ── */}
+              <WelcomeBonusBanner variant="hero" className="mb-2" />
 
               {/* Name */}
               <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 transition-all">
