@@ -107,7 +107,7 @@ export function RegistrationView({
       <WelcomeBonusBanner variant="hero" />
 
       {/* ── REGISTRATION FORM CARD ──────────────────────────────────── */}
-      <div className="mt-4 rounded-[28px] bg-white p-5 sm:p-6 shadow-xl border border-amber-200/90">
+      <div className="mt-3 rounded-[24px] bg-white p-4 sm:p-5 shadow-xl border border-amber-200/90">
         
         <div className="text-center mb-4">
           <h2 className="text-lg font-black text-slate-900 tracking-tight">
