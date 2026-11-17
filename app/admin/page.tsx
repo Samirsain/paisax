@@ -70,6 +70,8 @@ interface UserItem {
   successfulOrdersCount?: number
   ownedPlans: OwnedPlanDetail[]
   totalOrdersCount: number
+  bonusDaysClaimed?: number
+  bonusAmountClaimed?: number
   bankAccountName?: string | null
   bankAccountNumber?: string | null
   bankName?: string | null
@@ -171,7 +173,12 @@ interface AdminData {
     pendingWithdrawalsAmount: number
     approvedWithdrawalsCount: number
     approvedWithdrawalsAmount: number
+    rejectedWithdrawalsCount?: number
+    rejectedWithdrawalsAmount?: number
     totalWithdrawalsCount: number
+    totalBonusDistributed?: number
+    todayBonusClaimsCount?: number
+    todayBonusClaimsAmount?: number
     totalCommissionsPaid?: number
     totalCommissionsCount?: number
   }
@@ -987,7 +994,23 @@ export default function AdminPage() {
               </span>
             </p>
             <p className="mt-1 text-[11px] font-medium text-slate-400">
-              Awaiting bank transfer
+              Approved: {data?.stats?.approvedWithdrawalsCount ?? 0} · Rejected: {data?.stats?.rejectedWithdrawalsCount ?? 0}
+            </p>
+          </div>
+
+          {/* ₹200 Welcome Bonus Distributed */}
+          <div className="rounded-2xl bg-gradient-to-b from-slate-900 to-[#0e1726] p-4 border border-slate-800 shadow-lg col-span-2 sm:col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-yellow-300">Welcome Bonus Given</span>
+              <div className="flex size-7 items-center justify-center rounded-lg bg-yellow-500/15 text-yellow-400">
+                <GiftIcon className="size-4" />
+              </div>
+            </div>
+            <p className="mt-2 text-2xl font-black text-yellow-300 sm:text-3xl">
+              ₹{Number(data?.stats?.totalBonusDistributed ?? 0).toLocaleString("en-IN")}
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-slate-400">
+              Today: {data?.stats?.todayBonusClaimsCount ?? 0} claims (₹{Number(data?.stats?.todayBonusClaimsAmount ?? 0).toLocaleString("en-IN")})
             </p>
           </div>
 
@@ -1244,6 +1267,9 @@ export default function AdminPage() {
                                 Free User
                               </span>
                             )}
+                            <span className="block mt-1 text-[10px] font-bold text-amber-300 font-sans">
+                              🎁 Bonus: {u.bonusDaysClaimed ?? 0}/4 (₹{u.bonusAmountClaimed ?? 0})
+                            </span>
                           </td>
                           <td className="py-3 px-4 font-bold text-emerald-400 font-mono">
                             ₹{u.coins.toLocaleString("en-IN")}

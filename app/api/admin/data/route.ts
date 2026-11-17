@@ -211,6 +211,11 @@ export async function GET(req: NextRequest) {
       const directInvites = directInvitesCountMap.get(u.id) || directInvitesCountMap.get(u.invite_code) || 0
       const totalCommissionEarned = commissionsByRecipient.get(u.id) || 0
 
+      // Bonus Progress (₹200 Welcome Bonus: 4 days @ ₹50/day)
+      const freePlan = verifiedPlans.find((o: any) => o.planId === "free")
+      const bonusDaysClaimed = Math.min(4, Number(freePlan?.claimed || 0))
+      const bonusAmountClaimed = bonusDaysClaimed * 50
+
       return {
         id: u.id,
         name: u.name,
@@ -221,6 +226,8 @@ export async function GET(req: NextRequest) {
         inviterPhone: u.inviter_phone || null,
         directInvitesCount: directInvites,
         totalCommissionEarned,
+        bonusDaysClaimed,
+        bonusAmountClaimed,
         createdAt: u.created_at,
         coins: userCoins,
         mainBalance: walletSummary?.mainAvailableBalance ?? userCoins,
@@ -314,6 +321,7 @@ export async function GET(req: NextRequest) {
 
     const pendingWithdrawals = withdrawalsRows.filter((w: any) => w.status === "PENDING")
     const approvedWithdrawals = withdrawalsRows.filter((w: any) => w.status === "APPROVED" || w.status === "PAID")
+    const rejectedWithdrawals = withdrawalsRows.filter((w: any) => w.status === "REJECTED")
 
     const pendingWithdrawalsAmount = pendingWithdrawals.reduce(
       (sum: number, w: any) => sum + (Number(w.net_amount) || Number(w.amount) || 0),
@@ -324,6 +332,25 @@ export async function GET(req: NextRequest) {
       (sum: number, w: any) => sum + (Number(w.net_amount) || Number(w.amount) || 0),
       0
     )
+
+    const rejectedWithdrawalsAmount = rejectedWithdrawals.reduce(
+      (sum: number, w: any) => sum + (Number(w.net_amount) || Number(w.amount) || 0),
+      0
+    )
+
+    // Bonus stats calculation
+    const totalBonusDistributed = users.reduce((sum: number, u: any) => sum + (Number(u.bonusAmountClaimed) || 0), 0)
+    const todayDay = Math.floor(Date.now() / 86400000)
+    let todayBonusClaimsCount = 0
+    let todayBonusClaimsAmount = 0
+
+    for (const u of users) {
+      const gs = gameStatesByUserId.get(u.id)
+      if (gs && gs.lastClaimDay === todayDay) {
+        todayBonusClaimsCount += 1
+        todayBonusClaimsAmount += 50
+      }
+    }
 
     const totalCommissionsPaid = commissionsRows.reduce(
       (sum: number, c: any) => sum + (Number(c.commission_amount) || 0),
@@ -344,7 +371,12 @@ export async function GET(req: NextRequest) {
         pendingWithdrawalsAmount,
         approvedWithdrawalsCount: approvedWithdrawals.length,
         approvedWithdrawalsAmount,
+        rejectedWithdrawalsCount: rejectedWithdrawals.length,
+        rejectedWithdrawalsAmount,
         totalWithdrawalsCount: withdrawalsRows.length,
+        totalBonusDistributed,
+        todayBonusClaimsCount,
+        todayBonusClaimsAmount,
         totalCommissionsPaid,
         totalCommissionsCount: commissionsRows.length,
       },

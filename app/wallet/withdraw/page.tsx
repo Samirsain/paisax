@@ -71,6 +71,7 @@ export default function WithdrawPage() {
   } | null>(null)
 
   const [step, setStep] = useState<"form" | "success">("form")
+  const [showWelcomeOfferPopup, setShowWelcomeOfferPopup] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [withdrawalInfo, setWithdrawalInfo] = useState<{
@@ -294,6 +295,12 @@ export default function WithdrawPage() {
       return
     }
 
+    // Special Welcome Offer Check: If user only has free bonus and no active paid plan
+    if (!isPaidInvestor) {
+      setShowWelcomeOfferPopup(true)
+      return
+    }
+
     setLoading(true)
     setError("")
 
@@ -314,6 +321,10 @@ export default function WithdrawPage() {
       const data = await res.json()
 
       if (!res.ok) {
+        if (data.requiresPaidPlan) {
+          setShowWelcomeOfferPopup(true)
+          return
+        }
         throw new Error(data.error || "Withdrawal request failed")
       }
 
@@ -996,6 +1007,61 @@ export default function WithdrawPage() {
           ))}
         </div>
       </div>
+
+      {/* ── 🎁 SPECIAL WELCOME OFFER MODAL POPUP ─────────────────────── */}
+      {showWelcomeOfferPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-[340px] rounded-[32px] bg-gradient-to-b from-[#1c1206] via-[#241608] to-[#0f0a04] p-6 text-center text-white shadow-2xl border border-amber-500/50 animate-in zoom-in-95 duration-200">
+            
+            {/* Animated Gift Icon */}
+            <div className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-yellow-500 text-slate-950 font-black shadow-lg shadow-amber-500/40">
+              <GiftIcon className="size-8" />
+            </div>
+
+            {/* Title */}
+            <h3 className="mt-4 text-xl font-black text-white tracking-tight">
+              🎁 Special Welcome Offer!
+            </h3>
+
+            {/* Exact Required Message in Hindi */}
+            <p className="mt-2 text-xs text-amber-100 font-bold leading-relaxed px-1">
+              आपका <strong className="text-yellow-300 font-black">₹200 Welcome Bonus</strong> पूरा हो चुका है।
+              Withdrawal की सुविधा प्राप्त करने के लिए पहले कोई भी उपलब्ध Plan खरीदें।
+            </p>
+
+            {/* Mini Stat Card */}
+            <div className="mt-3.5 rounded-2xl bg-amber-500/15 p-3 border border-amber-400/30 text-left text-xs">
+              <div className="flex items-center justify-between text-amber-200 font-bold">
+                <span>Bonus Balance:</span>
+                <span className="font-mono text-yellow-300 font-black text-sm">₹{fmt(available)}</span>
+              </div>
+              <p className="text-[10px] text-slate-300 mt-1 leading-snug">
+                Plan khareedte hi yeh bonus aapke bank account me transfer ho jayega.
+              </p>
+            </div>
+
+            {/* Buttons: View Available Plans / Cancel */}
+            <div className="mt-5 flex flex-col gap-2">
+              <Link
+                href="/plans"
+                onClick={() => setShowWelcomeOfferPopup(false)}
+                className="w-full rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 py-3.5 px-4 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/30 active:scale-95 transition-all text-center flex items-center justify-center gap-1.5"
+              >
+                <span>View Available Plans</span>
+                <ArrowRightIcon className="size-3.5" strokeWidth={3} />
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setShowWelcomeOfferPopup(false)}
+                className="w-full rounded-full py-2.5 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

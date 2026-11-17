@@ -3,8 +3,9 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, Suspense } from "react"
 import Image from "next/image"
-import { ArrowRightIcon, EyeIcon, EyeOffIcon, LockIcon, PhoneIcon, UserIcon, GiftIcon, SunMediumIcon } from "lucide-react"
+import { ArrowRightIcon, EyeIcon, EyeOffIcon, LockIcon, PhoneIcon, UserIcon, GiftIcon, SunMediumIcon, SparklesIcon } from "lucide-react"
 import { useAuth } from "@/lib/auth"
+import { PhonePeLogo, PaytmLogo } from "@/components/registration-view"
 
 // Very fine gold dust particles concentrated specifically along the lower energy trails
 const TRAIL_GOLD_DUST = [
@@ -471,9 +472,45 @@ function AuthForm() {
               </div>
             </form>
           ) : (
-            /* Register Form */
+            /* Register Form with ₹200 Free Welcome Bonus Banner & Paytm / PhonePe Logos */
             <form onSubmit={handleRegister} className="flex flex-col gap-3.5">
               
+              {/* ── ₹200 FREE WELCOME BONUS BANNER ── */}
+              <div className="rounded-2xl bg-gradient-to-b from-[#1c1206] via-[#2a1a08] to-[#120a03] p-3 text-center border border-amber-500/40 text-white relative overflow-hidden shadow-sm">
+                <div className="inline-flex items-center gap-1 rounded-full bg-amber-500/25 px-2.5 py-0.5 text-[9px] font-black text-amber-300 border border-amber-400/40 mb-1">
+                  <SparklesIcon className="size-2.5 text-yellow-300" />
+                  <span>Free New User Gift</span>
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-amber-400">
+                  ₹200 FREE WELCOME BONUS
+                </div>
+                <p className="text-[11px] font-bold text-amber-100 mt-0.5 leading-snug">
+                  Register करें और पाएं <span className="text-yellow-300 font-extrabold">₹200 तक का Welcome Bonus</span>
+                </p>
+
+                {/* 4 Days roadmap */}
+                <div className="mt-2 grid grid-cols-4 gap-1 text-[9px] font-bold">
+                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
+                    Day 1: ₹50
+                  </div>
+                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
+                    Day 2: ₹50
+                  </div>
+                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
+                    Day 3: ₹50
+                  </div>
+                  <div className="bg-amber-500/15 rounded-lg py-1 border border-amber-400/30 text-amber-200">
+                    Day 4: ₹50
+                  </div>
+                </div>
+
+                {/* Paytm & PhonePe Logos */}
+                <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-center gap-2">
+                  <PhonePeLogo className="h-5 w-auto" />
+                  <PaytmLogo className="h-5 w-auto" />
+                </div>
+              </div>
+
               {/* Name */}
               <div className="flex items-center rounded-full border border-amber-200/80 px-3.5 py-1.5 bg-[#fffdfa] focus-within:border-amber-500 transition-all">
                 <span className="flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 shrink-0">
@@ -559,13 +596,18 @@ function AuthForm() {
                 />
               </div>
 
+              {/* Mandatory Policy Disclosure */}
+              <div className="rounded-xl bg-amber-50 p-2.5 border border-amber-300 text-[10px] text-amber-950 font-medium leading-relaxed">
+                <strong className="font-extrabold text-amber-900">Bonus Rule:</strong> ₹200 Welcome Bonus har din ₹50 karke 4 din me collect hoga. Withdrawal ki suvidha prapt karne ke liye pehle koi bhi uplabdh plan active karein.
+              </div>
+
               {/* Register Now CTA Button */}
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-2 flex w-full items-center justify-between rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3 pl-6 pr-3 text-base font-extrabold text-white shadow-xl shadow-amber-500/30 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+                className="mt-1 flex w-full items-center justify-between rounded-full bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 py-3 pl-6 pr-3 text-base font-extrabold text-white shadow-xl shadow-amber-500/30 transition-all hover:opacity-95 active:scale-[0.98] disabled:opacity-70 cursor-pointer"
               >
-                <span>{loading ? "Creating account…" : "Register Now"}</span>
+                <span>{loading ? "Creating account…" : "Register & Claim ₹200 Bonus"}</span>
                 <span className="flex size-8.5 items-center justify-center rounded-full bg-white text-amber-700 shadow-sm">
                   <ArrowRightIcon className="size-4.5" strokeWidth={2.5} />
                 </span>

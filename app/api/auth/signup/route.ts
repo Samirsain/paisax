@@ -50,9 +50,28 @@ export async function POST(req: NextRequest) {
       RETURNING id, name, phone, invite_code, invited_by
     `
 
-    // Seed empty game state
+    // Seed game state with Free Trial Plan automatically activated (Day 1 ready to claim!)
+    const now = Date.now()
+    const freePlanOrderId = `ORD_FREE_${now}_${crypto.randomBytes(3).toString("hex").toUpperCase()}`
+    const initialGameState = {
+      coins: 0,
+      owned: [
+        {
+          id: freePlanOrderId,
+          planId: "free",
+          boughtAt: now,
+          claimed: 0,
+          lastClaimAt: null,
+          status: "active",
+        },
+      ],
+      history: [],
+      invites: 0,
+      lastClaimDay: null,
+    }
+
     await db`
-      INSERT INTO game_states (user_id, state) VALUES (${user.id}, '{}'::jsonb)
+      INSERT INTO game_states (user_id, state) VALUES (${user.id}, ${JSON.stringify(initialGameState)}::jsonb)
       ON CONFLICT (user_id) DO NOTHING
     `
 

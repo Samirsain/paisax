@@ -127,6 +127,21 @@ export async function GET() {
       stateModified = true
     }
 
+    // Ensure every user has the ₹200 Free Trial Welcome Bonus plan (4 days @ ₹50/day)
+    const hasFreePlan = serverState.owned.some((o: any) => o && o.planId === "free")
+    if (!hasFreePlan) {
+      const now = Date.now()
+      serverState.owned.unshift({
+        id: `ORD_FREE_${now}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        planId: "free",
+        claimed: 0,
+        boughtAt: now,
+        lastClaimAt: null,
+        status: "active",
+      })
+      stateModified = true
+    }
+
     // 6. Active Reconcile: Ensure all referral commissions are in serverState.history and credited to wallet
     try {
       const commissions = await db`

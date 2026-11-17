@@ -19,6 +19,8 @@ import {
 } from "lucide-react"
 import { BuySheet } from "@/components/buy-sheet"
 import { WelcomeModal } from "@/components/welcome-modal"
+import { WelcomeBonusCard } from "@/components/welcome-bonus-card"
+import { RecentWithdrawalActivity } from "@/components/recent-withdrawal-activity"
 import { Skeleton } from "@/components/marks"
 import { PLANS, active, ready, getPlan, type Plan, type PlanId } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
@@ -264,6 +266,9 @@ export default function HomePage() {
         )
       })()}
 
+      {/* ── ₹200 WELCOME BONUS COLLECTION CARD ────────────────────────── */}
+      <WelcomeBonusCard />
+
       {/* ── PLAN CATEGORY TABS (Normal Plan vs VIP Plan in Solar Yellow) ── */}
       <div className="flex rounded-full bg-white p-1 border border-amber-200 shadow-xs">
         <button
@@ -377,6 +382,9 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+
+      {/* ── RECENT WITHDRAWAL ACTIVITY SECTION (500+ Capacity / Live Proofs) ─── */}
+      <RecentWithdrawalActivity />
 
       {/* Buy Sheet modal */}
       <BuySheet planId={buying} onClose={() => setBuying(null)} />

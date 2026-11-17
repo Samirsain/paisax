@@ -246,6 +246,16 @@ export async function POST(req: NextRequest) {
     )
     const hasPaidPlan = confirmedPaidOrders.length > 0 || Boolean(userOwnedPaidPlan)
 
+    if (!hasPaidPlan) {
+      return NextResponse.json(
+        {
+          error: "आपका ₹200 Welcome Bonus पूरा हो चुका है। Withdrawal की सुविधा प्राप्त करने के लिए पहले कोई भी उपलब्ध Plan खरीदें।",
+          requiresPaidPlan: true,
+        },
+        { status: 403 }
+      )
+    }
+
     // Authoritative balance check based on chosen balanceType
     const availableForType =
       balanceType === "referral"
