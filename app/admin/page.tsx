@@ -32,6 +32,7 @@ import {
   BellRingIcon,
   SendIcon,
   WalletIcon,
+  CoinsIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -161,6 +162,22 @@ interface CommissionItem {
   createdAt: string
 }
 
+interface ClaimItem {
+  id: string
+  userId: string
+  userName: string
+  userPhone: string
+  planInstanceId: string
+  planId: string
+  planName: string
+  dayNumber: number
+  claimDate: string
+  amount: number
+  status: string
+  errorMessage?: string
+  createdAt: string
+}
+
 interface AdminData {
   stats: {
     totalUsers: number
@@ -181,12 +198,19 @@ interface AdminData {
     todayBonusClaimsAmount?: number
     totalCommissionsPaid?: number
     totalCommissionsCount?: number
+    totalDailyClaims?: number
+    successfulClaims?: number
+    failedClaims?: number
+    totalClaimsAmount?: number
+    todayClaimsCount?: number
+    todayClaimsAmount?: number
   }
   users: UserItem[]
   paidUsers: PaidUserItem[]
   orders: OrderItem[]
   withdrawals: WithdrawalItem[]
   commissions?: CommissionItem[]
+  claims?: ClaimItem[]
 }
 
 export default function AdminPage() {
@@ -197,11 +221,12 @@ export default function AdminPage() {
 
   const [data, setData] = useState<AdminData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders" | "commissions" | "giftcards" | "notifications">("users")
+  const [activeTab, setActiveTab] = useState<"users" | "paid" | "withdrawals" | "orders" | "claims" | "commissions" | "giftcards" | "notifications">("users")
   const [search, setSearch] = useState("")
   const [withdrawalFilter, setWithdrawalFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("ALL")
   const [orderFilter, setOrderFilter] = useState<"ALL" | "SUCCESS" | "PENDING" | "FAILED">("ALL")
   const [commissionFilter, setCommissionFilter] = useState<"ALL" | "1" | "2" | "3">("ALL")
+  const [claimFilter, setClaimFilter] = useState<"ALL" | "SUCCESS" | "FAILED">("ALL")
   const [orderCheckingId, setOrderCheckingId] = useState<string | null>(null)
 
   // Gift card state
@@ -702,6 +727,25 @@ export default function AdminPage() {
     )
   }, [data?.commissions, commissionFilter, search])
 
+  // Filtered daily claims
+  const filteredClaims = useMemo(() => {
+    if (!data?.claims) return []
+    let list = data.claims
+    if (claimFilter !== "ALL") {
+      list = list.filter((c) => c.status === claimFilter)
+    }
+    const q = search.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(
+      (c) =>
+        c.userName?.toLowerCase().includes(q) ||
+        c.userPhone?.includes(q) ||
+        c.id?.toLowerCase().includes(q) ||
+        c.planName?.toLowerCase().includes(q) ||
+        c.claimDate?.includes(q)
+    )
+  }, [data?.claims, claimFilter, search])
+
   async function handleCheckGateway(orderId: string) {
     setOrderCheckingId(orderId)
     try {
@@ -1065,6 +1109,27 @@ export default function AdminPage() {
                 {(data?.orders?.filter((o) => o.status === "SUCCESS").length ?? 0) > 0 && (
                   <span className="ml-1 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[10px] text-emerald-300 font-extrabold">
                     {data?.orders?.filter((o) => o.status === "SUCCESS").length} Paid
+                  </span>
+                )}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("claims")}
+              className={cn(
+                "flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                activeTab === "claims"
+                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                  : "bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800"
+              )}
+            >
+              <CoinsIcon className="size-3.5" />
+              <span>
+                Daily Claims ({data?.claims?.length ?? 0})
+                {(data?.stats?.todayClaimsCount ?? 0) > 0 && (
+                  <span className="ml-1 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[10px] text-emerald-300 font-extrabold">
+                    {data?.stats?.todayClaimsCount} Today
                   </span>
                 )}
               </span>
@@ -1992,6 +2057,172 @@ export default function AdminPage() {
                           </tr>
                         )
                       })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ── TAB: DAILY CLAIMS ──────────────────────────────────────────────── */}
+        {activeTab === "claims" && (
+          <div className="mt-4">
+            
+            {/* Header & Filter Controls */}
+            <div className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-black text-white flex items-center gap-2">
+                  <span>Daily Amount Claims Log ({filteredClaims.length})</span>
+                  <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 text-xs font-black text-emerald-300 font-mono">
+                    ₹{Number(data?.stats?.totalClaimsAmount ?? 0).toLocaleString("en-IN")} Total Claimed
+                  </span>
+                  <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-2.5 py-0.5 text-xs font-black text-amber-300 font-mono">
+                    {data?.stats?.todayClaimsCount ?? 0} Today (₹{Number(data?.stats?.todayClaimsAmount ?? 0).toLocaleString("en-IN")})
+                  </span>
+                </h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Complete server-authoritative audit log of daily returns claimed across Free Welcome and Solar Plans
+                </p>
+              </div>
+
+              {/* Status Filter Buttons */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                {(
+                  [
+                    { key: "ALL", label: `All Claims (${data?.claims?.length ?? 0})` },
+                    { key: "SUCCESS", label: `Successful (${data?.stats?.successfulClaims ?? 0})` },
+                    { key: "FAILED", label: `Failed (${data?.stats?.failedClaims ?? 0})` },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setClaimFilter(f.key)}
+                    className={cn(
+                      "rounded-xl px-3 py-1.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                      claimFilter === f.key
+                        ? "bg-amber-500 text-slate-950 font-black shadow-sm"
+                        : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Claims Table */}
+            <div className="rounded-2xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-900/60 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                      <th className="py-3 px-4">Claim Transaction ID</th>
+                      <th className="py-3 px-4">User Details</th>
+                      <th className="py-3 px-4">Plan & Day Number</th>
+                      <th className="py-3 px-4">Daily Amount</th>
+                      <th className="py-3 px-4">Claim Date & Time</th>
+                      <th className="py-3 px-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-medium">
+                    {filteredClaims.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-500">
+                          <CoinsIcon className="size-8 mx-auto mb-2 text-slate-600" />
+                          <p className="font-bold">No daily claims found matching criteria</p>
+                          <p className="text-[11px] text-slate-600 mt-1">Users will appear here as they claim their daily returns</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredClaims.map((c) => (
+                        <tr key={c.id} className="hover:bg-slate-900/40 transition-colors">
+                          
+                          {/* Claim ID */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300">
+                              <span className="truncate max-w-[170px]" title={c.id}>
+                                {c.id}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(c.id, `claim-${c.id}`)}
+                                title="Copy Claim Transaction ID"
+                                className="text-slate-500 hover:text-amber-400 cursor-pointer"
+                              >
+                                {copiedKey === `claim-${c.id}` ? (
+                                  <CheckIcon className="size-3 text-emerald-400" />
+                                ) : (
+                                  <CopyIcon className="size-3" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* User Details */}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-white text-xs">{c.userName}</span>
+                              <span className="font-mono text-[11px] text-slate-400">{c.userPhone}</span>
+                            </div>
+                          </td>
+
+                          {/* Plan & Day */}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-200">{c.planName}</span>
+                              <span className="text-[11px] text-amber-400 font-semibold">
+                                Day {c.dayNumber} Cycle
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Amount */}
+                          <td className="py-3 px-4">
+                            <span className="text-sm font-black text-emerald-400 font-mono">
+                              +₹{Number(c.amount).toLocaleString("en-IN")}
+                            </span>
+                          </td>
+
+                          {/* Claim Date & Time */}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col text-[11px] text-slate-400">
+                              <span className="font-bold text-slate-300">{c.claimDate}</span>
+                              <span className="text-slate-500">
+                                {new Date(c.createdAt).toLocaleTimeString("en-IN", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: true,
+                                })}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-4">
+                            {c.status === "SUCCESS" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-black text-emerald-400">
+                                <CheckCircle2Icon className="size-3 text-emerald-400" />
+                                <span>SUCCESS</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 border border-rose-500/30 px-2.5 py-0.5 text-[10px] font-black text-rose-400">
+                                <XCircleIcon className="size-3 text-rose-400" />
+                                <span>FAILED</span>
+                              </span>
+                            )}
+                            {c.errorMessage && (
+                              <p className="text-[10px] text-rose-400/80 mt-0.5 truncate max-w-[140px]" title={c.errorMessage}>
+                                {c.errorMessage}
+                              </p>
+                            )}
+                          </td>
+
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>

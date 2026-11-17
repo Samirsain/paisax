@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
-import { getPlan, type PlanId } from "@/lib/game"
+import { getPlan, type PlanId, getISTDateString } from "@/lib/game"
 import { getAllUsersWalletSummary } from "@/lib/wallet-ledger"
 
 export async function GET(req: NextRequest) {
@@ -132,6 +132,30 @@ export async function GET(req: NextRequest) {
         c.recipient_id,
         (commissionsByRecipient.get(c.recipient_id) || 0) + (Number(c.commission_amount) || 0)
       )
+    })
+
+    // 5. Fetch all daily claims
+    const dailyClaimsRows = await db`
+      SELECT 
+        dc.id,
+        dc.user_id,
+        dc.plan_instance_id,
+        dc.plan_id,
+        dc.day_number,
+        dc.claim_date,
+        dc.amount,
+        dc.status,
+        dc.error_message,
+        dc.created_at,
+        u.name as user_name,
+        u.phone as user_phone
+      FROM daily_claims dc
+      JOIN users u ON u.id = dc.user_id
+      ORDER BY dc.created_at DESC
+      LIMIT 1000
+    `.catch((err) => {
+      console.error("Failed to query daily_claims:", err)
+      return []
     })
 
     // Precompute direct invites count per user
@@ -357,6 +381,19 @@ export async function GET(req: NextRequest) {
       0
     )
 
+    // Daily Claims Stats
+    const totalDailyClaimsCount = dailyClaimsRows.length
+    const successfulClaimsCount = dailyClaimsRows.filter((c: any) => c.status === "SUCCESS").length
+    const failedClaimsCount = dailyClaimsRows.filter((c: any) => c.status !== "SUCCESS").length
+    const totalClaimsAmount = dailyClaimsRows
+      .filter((c: any) => c.status === "SUCCESS")
+      .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0)
+
+    const todayIST = getISTDateString(Date.now())
+    const todayClaims = dailyClaimsRows.filter((c: any) => c.claim_date === todayIST && c.status === "SUCCESS")
+    const todayClaimsCount = todayClaims.length
+    const todayClaimsAmount = todayClaims.reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0)
+
     return NextResponse.json({
       stats: {
         totalUsers,
@@ -379,6 +416,12 @@ export async function GET(req: NextRequest) {
         todayBonusClaimsAmount,
         totalCommissionsPaid,
         totalCommissionsCount: commissionsRows.length,
+        totalDailyClaims: totalDailyClaimsCount,
+        successfulClaims: successfulClaimsCount,
+        failedClaims: failedClaimsCount,
+        totalClaimsAmount,
+        todayClaimsCount,
+        todayClaimsAmount,
       },
       users,
       paidUsers: paidUsersList,
@@ -432,6 +475,21 @@ export async function GET(req: NextRequest) {
         orderAmount: Number(c.order_amount),
         commissionAmount: Number(c.commission_amount),
         status: c.status,
+        createdAt: c.created_at,
+      })),
+      claims: dailyClaimsRows.map((c: any) => ({
+        id: c.id,
+        userId: c.user_id,
+        userName: c.user_name || "User",
+        userPhone: c.user_phone || "",
+        planInstanceId: c.plan_instance_id,
+        planId: c.plan_id,
+        planName: getPlan(c.plan_id as PlanId)?.name || c.plan_id,
+        dayNumber: Number(c.day_number) || 1,
+        claimDate: c.claim_date,
+        amount: Number(c.amount) || 0,
+        status: c.status,
+        errorMessage: c.error_message,
         createdAt: c.created_at,
       })),
     })

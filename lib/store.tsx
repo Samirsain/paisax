@@ -247,6 +247,8 @@ export async function syncWithServer() {
 const actions = {
   /** Claims today's check-in plus every ready plan, or one plan; returns the coins collected. */
   collect: (onlyId?: string) => earn((s, t) => game.collect(s, t, onlyId)),
+  claim: (onlyId?: string) => earn((s, t) => game.collect(s, t, onlyId)),
+  applyServerState: (serverState: Partial<State>) => commit((s) => ({ ...s, ...serverState })),
   buy: (planId: PlanId) => commit((s, t) => game.buy(s, planId, t)),
   activatePlan: (planId: PlanId, orderId?: string) => commit((s, t) => game.activatePlan(s, planId, t, orderId)),
   withdraw: (amount: number, method = "bank") => commit((s, t) => game.withdraw(s, amount, t, method)),

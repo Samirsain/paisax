@@ -315,7 +315,7 @@ export async function POST(req: NextRequest) {
         ownedMap.set(key, {
           ...existing,
           claimed: Math.max(Number(existing.claimed) || 0, Number(co.claimed) || 0),
-          lastClaimAt: co.lastClaimAt || existing.lastClaimAt,
+          lastClaimAt: Math.max(Number(existing.lastClaimAt) || 0, Number(co.lastClaimAt) || 0) || null,
           status: co.status || existing.status,
         })
       } else {

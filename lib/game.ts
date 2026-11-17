@@ -121,6 +121,23 @@ export const checkinCoins = (streakDay: number) => 5 * Math.min(streakDay, STREA
 export const LEVELS = [0, 400, 800, 1200, 1800, 2600, 3600, 5000, 7000, 10000]
 
 export const DAY_MS = 24 * 60 * 60 * 1000
+export const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000 // Indian Standard Time (UTC+05:30)
+
+/** Returns Indian Standard Time date as 'YYYY-MM-DD' */
+export function getISTDateString(t: number = Date.now()): string {
+  const d = new Date(t + IST_OFFSET_MS)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(d.getUTCDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/** Returns unix timestamp of the next midnight (00:00:00) in IST after timestamp t */
+export function nextISTMidnight(t: number = Date.now()): number {
+  const istTime = t + IST_OFFSET_MS
+  const nextMidnightInIST = Math.floor(istTime / DAY_MS + 1) * DAY_MS
+  return nextMidnightInIST - IST_OFFSET_MS
+}
 
 export interface Owned {
   id: string
@@ -181,10 +198,15 @@ export function isState(x: unknown): x is State {
 let seq = 0
 const uid = (now: number) => `${now.toString(36)}-${(seq++).toString(36)}`
 
-/** Local calendar day as a whole number, safe across DST changes. */
-export function dayOf(t: number) {
-  const d = new Date(t)
-  return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS)
+/** Local calendar day as an integer in IST, safe across DST changes. */
+export function dayOf(t: number = Date.now()) {
+  return Math.floor((t + IST_OFFSET_MS) / DAY_MS)
+}
+
+/** Whether a plan has already been claimed on the current IST calendar date */
+export function isClaimedToday(o: Owned, now: number = Date.now()): boolean {
+  if (o.lastClaimAt === null) return false
+  return getISTDateString(o.lastClaimAt) === getISTDateString(now)
 }
 
 export const isDone = (o: Owned) => o.claimed >= getPlan(o.planId).days
@@ -203,19 +225,18 @@ export function hasBoughtPaidPlan(s: State): boolean {
 
 /** When this plan pays next, or null once all its days are claimed.
  * Day 1: Ready immediately upon activation.
- * Subsequent days: Ready at start of the next calendar day (midnight 00:00:00).
+ * Subsequent days: Ready at start of the next calendar day in IST (midnight 00:00:00 IST).
  */
 export function nextClaimAt(o: Owned): number | null {
   if (isDone(o) || isDeactivated(o)) return null
   if (o.lastClaimAt === null) return o.boughtAt
-  const d = new Date(o.lastClaimAt)
-  d.setHours(24, 0, 0, 0)
-  return d.getTime()
+  return nextISTMidnight(o.lastClaimAt)
 }
 
 export const ready = (s: State, now: number) =>
   s.owned.filter((o) => {
     if (isDone(o) || isDeactivated(o)) return false
+    if (isClaimedToday(o, now)) return false
     const at = nextClaimAt(o)
     return at !== null && now >= at
   })

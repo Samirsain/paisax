@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils"
 import { ClaimRewardModal } from "@/components/claim-modal"
 
 export default function MyPlansPage() {
-  const { ready: loaded, state, now, syncWithServer } = useStore()
+  const { ready: loaded, state, now, syncWithServer, applyServerState } = useStore()
   const [tab, setTab] = useState<"active" | "completed">("active")
   const [countdown, setCountdown] = useState("00:00:00")
   const [claimedReward, setClaimedReward] = useState<{ planName: string; coins: number; day?: number; totalDays?: number } | null>(null)
@@ -80,6 +80,9 @@ export default function MyPlansPage() {
         throw new Error(data.message || data.error || "Failed to claim rewards")
       }
 
+      if (data.serverState && typeof applyServerState === "function") {
+        applyServerState(data.serverState)
+      }
       await syncWithServer()
       setClaimedReward({
         planName: dueList.length > 1 ? `${dueList.length} Solar Plans` : getPlan(dueList[0].planId).name,
@@ -110,6 +113,9 @@ export default function MyPlansPage() {
         throw new Error(data.message || data.error || "Failed to claim reward")
       }
 
+      if (data.serverState && typeof applyServerState === "function") {
+        applyServerState(data.serverState)
+      }
       await syncWithServer()
       const firstClaim = data.claims?.[0]
       setClaimedReward({

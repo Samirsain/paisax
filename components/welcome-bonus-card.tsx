@@ -13,11 +13,11 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useStore, fmt } from "@/lib/store"
-import { dayOf, isDone, nextClaimAt, getPlan } from "@/lib/game"
+import { dayOf, isDone, nextClaimAt, isClaimedToday, getPlan } from "@/lib/game"
 import { cn } from "@/lib/utils"
 
 export function WelcomeBonusCard() {
-  const { state, claim, now, syncWithServer } = useStore()
+  const { state, claim, now, syncWithServer, applyServerState } = useStore()
   const [claiming, setClaiming] = useState(false)
 
   // Find user's free welcome plan
@@ -32,9 +32,7 @@ export function WelcomeBonusCard() {
 
   // Check if today's reward is ready to collect
   const currentTime = now || Date.now()
-  const currentCalendarDay = dayOf(currentTime)
-  const alreadyClaimedToday =
-    freePlanItem.lastClaimAt !== null && dayOf(freePlanItem.lastClaimAt) === currentCalendarDay
+  const alreadyClaimedToday = isClaimedToday(freePlanItem, currentTime)
   const readyAt = nextClaimAt(freePlanItem)
   const isReadyToClaim =
     !isCompleted && !alreadyClaimedToday && readyAt !== null && currentTime >= readyAt
@@ -59,13 +57,17 @@ export function WelcomeBonusCard() {
 
       const data = await res.json()
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to collect daily bonus")
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.message || "Failed to collect daily bonus")
       }
 
-      // 2. Update store locally
-      claim(freePlanItem.id)
-      syncWithServer().catch(() => {})
+      // 2. Update store directly with authoritative server state
+      if (data.serverState && typeof applyServerState === "function") {
+        applyServerState(data.serverState)
+      } else if (typeof claim === "function") {
+        claim(freePlanItem.id)
+      }
+      await syncWithServer().catch(() => {})
 
       toast.success(`🎁 Day ${nextDayToClaim} Welcome Bonus (₹50) credited to your wallet!`, {
         description: `Total bonus claimed: ₹${fmt(totalEarnedFromBonus + 50)} / ₹200`,

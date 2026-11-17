@@ -1,17 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { db } from "@/lib/db"
-import { getPlan, type PlanId, dayOf, isDone, nextClaimAt, type Owned } from "@/lib/game"
+import { getPlan, type PlanId, dayOf, isDone, nextClaimAt, isClaimedToday, getISTDateString, type Owned } from "@/lib/game"
 import { parseGameState } from "@/lib/order-credit"
 import { getUserWalletSummary } from "@/lib/wallet-ledger"
-import crypto from "crypto"
+
+class ClaimError extends Error {
+  statusCode: number
+  constructor(message: string, statusCode = 400) {
+    super(message)
+    this.name = "ClaimError"
+    this.statusCode = statusCode
+  }
+}
 
 /**
  * POST /api/game/claim
  * 
- * Server-authoritative daily reward claim endpoint.
- * Validates eligibility, cycle expiration, calendar day constraints,
- * and atomically credits the reward to the live wallet ledger.
+ * Server-authoritative daily reward claim endpoint with:
+ * - Atomic database transaction (db.begin)
+ * - Row-level locking (FOR UPDATE) to prevent concurrency/race conditions
+ * - Relational daily_claims table insertion with UNIQUE constraint on (user_id, plan_instance_id, claim_date)
+ * - IST (UTC+05:30) date validation
+ * - Instant wallet balance synchronization
  */
 export async function POST(req: NextRequest) {
   try {
@@ -19,171 +30,240 @@ export async function POST(req: NextRequest) {
     const uid = cookieStore.get("paisax_uid")?.value
 
     if (!uid) {
-      return NextResponse.json({ error: "Please log in to claim rewards" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Please log in to claim rewards" }, { status: 401 })
     }
 
     const body = await req.json().catch(() => ({}))
     const { planInstanceId, claimAll = false } = body
 
-    // 1. Fetch current game state from DB
-    const [gsRow] = await db`SELECT state FROM game_states WHERE user_id = ${uid} LIMIT 1`
-    if (!gsRow) {
-      return NextResponse.json({ error: "Game account not found" }, { status: 404 })
-    }
-
-    const state = parseGameState(gsRow.state)
-    const owned: Owned[] = Array.isArray(state.owned) ? state.owned : []
     const now = Date.now()
-    const today = dayOf(now)
+    const todayIST = getISTDateString(now)
 
-    // 2. Identify candidate plans
-    const candidates = owned.filter((o) => {
-      if (planInstanceId && o.id !== planInstanceId) return false
-      return true
-    })
-
-    if (candidates.length === 0) {
-      return NextResponse.json({ error: "No matching solar plan found" }, { status: 404 })
-    }
-
-    const eligibleToClaim: {
-      ownedItem: Owned
-      plan: ReturnType<typeof getPlan>
-      dayToClaim: number
-      rewardCoins: number
-    }[] = []
-
-    for (const o of candidates) {
-      const plan = getPlan(o.planId)
-
-      // A. Check if plan has been deactivated by admin
-      if (o.status === "deactivated") {
-        if (!claimAll && planInstanceId === o.id) {
-          return NextResponse.json({ error: `This ${plan.name} has been deactivated by administrator.` }, { status: 400 })
-        }
-        continue
+    // Execute claim inside an atomic PostgreSQL transaction
+    const txResult = await db.begin(async (sql) => {
+      // 1. Lock user's game_states row for update
+      const [gsRow] = await sql`
+        SELECT state FROM game_states WHERE user_id = ${uid} FOR UPDATE
+      `
+      if (!gsRow) {
+        throw new ClaimError("Game account not found", 404)
       }
 
-      // B. Check cycle expiration
-      if (isDone(o) || o.claimed >= plan.days) {
-        if (!claimAll && planInstanceId === o.id) {
-          return NextResponse.json({ error: `This ${plan.name} has completed its full ${plan.days}-day cycle.` }, { status: 400 })
-        }
-        continue
-      }
+      const state = parseGameState(gsRow.state)
+      const owned: Owned[] = Array.isArray(state.owned) ? state.owned : []
 
-      // B. Check readiness time
-      const readyAt = nextClaimAt(o)
-      if (readyAt === null || now < readyAt) {
-        if (!claimAll && planInstanceId === o.id) {
-          return NextResponse.json({ error: `Daily reward for ${plan.name} is not ready yet.` }, { status: 400 })
-        }
-        continue
-      }
-
-      // C. Check if already claimed today
-      if (o.lastClaimAt !== null && dayOf(o.lastClaimAt) === today) {
-        if (!claimAll && planInstanceId === o.id) {
-          return NextResponse.json({ error: `Today's reward for ${plan.name} has already been claimed.` }, { status: 400 })
-        }
-        continue
-      }
-
-      eligibleToClaim.push({
-        ownedItem: o,
-        plan,
-        dayToClaim: o.claimed + 1,
-        rewardCoins: plan.perDay,
-      })
-    }
-
-    if (eligibleToClaim.length === 0) {
-      return NextResponse.json({
-        success: false,
-        message: "No daily returns are currently available to claim. Next payout cycle starts at midnight.",
-      }, { status: 400 })
-    }
-
-    // 3. Atomically apply claims
-    let totalClaimedCoins = 0
-    const claimLogs: any[] = []
-    const newHistoryEntries: any[] = []
-
-    const updatedOwned = owned.map((o) => {
-      const match = eligibleToClaim.find((e) => e.ownedItem.id === o.id)
-      if (!match) return o
-
-      const claimId = `CLM_${o.id}_D${match.dayToClaim}_${now}`
-      totalClaimedCoins += match.rewardCoins
-
-      claimLogs.push({
-        planInstanceId: o.id,
-        planId: o.planId,
-        planName: match.plan.name,
-        day: match.dayToClaim,
-        totalDays: match.plan.days,
-        reward: match.rewardCoins,
-        claimId,
+      // 2. Identify candidate plans
+      const candidates = owned.filter((o) => {
+        if (planInstanceId && o.id !== planInstanceId) return false
+        return true
       })
 
-      newHistoryEntries.push({
-        id: claimId,
-        at: now,
-        coins: match.rewardCoins,
-        kind: "claim",
-        planId: o.planId,
-        day: match.dayToClaim,
+      if (candidates.length === 0) {
+        throw new ClaimError("No matching solar plan found", 404)
+      }
+
+      const eligibleToClaim: {
+        ownedItem: Owned
+        plan: ReturnType<typeof getPlan>
+        dayToClaim: number
+        rewardCoins: number
+      }[] = []
+
+      for (const o of candidates) {
+        const plan = getPlan(o.planId)
+
+        // A. Check if deactivated by admin
+        if (o.status === "deactivated") {
+          if (!claimAll && planInstanceId === o.id) {
+            throw new ClaimError(`This ${plan.name} has been deactivated by administrator.`, 400)
+          }
+          continue
+        }
+
+        // B. Check cycle expiration
+        if (isDone(o) || (Number(o.claimed) || 0) >= plan.days) {
+          if (!claimAll && planInstanceId === o.id) {
+            throw new ClaimError(`This ${plan.name} has completed its full ${plan.days}-day cycle.`, 400)
+          }
+          continue
+        }
+
+        // C. Check readiness time
+        const readyAt = nextClaimAt(o)
+        if (readyAt === null || now < readyAt) {
+          if (!claimAll && planInstanceId === o.id) {
+            throw new ClaimError(`Daily reward for ${plan.name} is not ready yet. Next payout at midnight.`, 400)
+          }
+          continue
+        }
+
+        // D. Check if already claimed today in state (IST)
+        if (isClaimedToday(o, now)) {
+          if (!claimAll && planInstanceId === o.id) {
+            throw new ClaimError(`Today's reward for ${plan.name} has already been claimed.`, 400)
+          }
+          continue
+        }
+
+        // E. Check if already claimed today in daily_claims table (Double check)
+        const [existingClaim] = await sql`
+          SELECT id FROM daily_claims 
+          WHERE user_id = ${uid} 
+            AND plan_instance_id = ${o.id} 
+            AND claim_date = ${todayIST} 
+            AND status = 'SUCCESS'
+          LIMIT 1
+        `
+        if (existingClaim) {
+          if (!claimAll && planInstanceId === o.id) {
+            throw new ClaimError(`Today's reward for ${plan.name} has already been claimed.`, 400)
+          }
+          continue
+        }
+
+        const nextDayToClaim = (Number(o.claimed) || 0) + 1
+
+        // F. Check day number uniqueness in daily_claims
+        const [existingDayClaim] = await sql`
+          SELECT id FROM daily_claims 
+          WHERE user_id = ${uid} 
+            AND plan_instance_id = ${o.id} 
+            AND day_number = ${nextDayToClaim} 
+            AND status = 'SUCCESS'
+          LIMIT 1
+        `
+        if (existingDayClaim) {
+          if (!claimAll && planInstanceId === o.id) {
+            throw new ClaimError(`Day ${nextDayToClaim} reward for ${plan.name} has already been claimed.`, 400)
+          }
+          continue
+        }
+
+        eligibleToClaim.push({
+          ownedItem: o,
+          plan,
+          dayToClaim: nextDayToClaim,
+          rewardCoins: plan.perDay,
+        })
+      }
+
+      if (eligibleToClaim.length === 0) {
+        throw new ClaimError("Daily Amount Not Available. Next payout cycle starts at midnight.", 400)
+      }
+
+      // 3. Apply claims atomically
+      let totalClaimedCoins = 0
+      const claimLogs: any[] = []
+      const newHistoryEntries: any[] = []
+
+      for (const item of eligibleToClaim) {
+        const { ownedItem: o, plan, dayToClaim, rewardCoins } = item
+        const claimTxnId = `CLM_${o.id}_D${dayToClaim}_${now}`
+        totalClaimedCoins += rewardCoins
+
+        // Insert into daily_claims table
+        await sql`
+          INSERT INTO daily_claims (
+            id, user_id, plan_instance_id, plan_id, day_number, claim_date, amount, status, created_at
+          ) VALUES (
+            ${claimTxnId}, ${uid}, ${o.id}, ${o.planId}, ${dayToClaim}, ${todayIST}, ${rewardCoins}, 'SUCCESS', now()
+          )
+        `
+
+        claimLogs.push({
+          claimId: claimTxnId,
+          planInstanceId: o.id,
+          planId: o.planId,
+          planName: plan.name,
+          day: dayToClaim,
+          totalDays: plan.days,
+          reward: rewardCoins,
+          claimDate: todayIST,
+        })
+
+        newHistoryEntries.push({
+          id: claimTxnId,
+          at: now,
+          coins: rewardCoins,
+          kind: "claim",
+          planId: o.planId,
+          day: dayToClaim,
+        })
+      }
+
+      // 4. Update owned plans
+      const updatedOwned = owned.map((o) => {
+        const match = eligibleToClaim.find((e) => e.ownedItem.id === o.id)
+        if (!match) return o
+        return {
+          ...o,
+          claimed: match.dayToClaim,
+          lastClaimAt: now,
+        }
       })
+
+      const existingHistory = Array.isArray(state.history) ? state.history : []
+      const updatedHistory = [...newHistoryEntries, ...existingHistory]
+
+      const currentCoins = Number(state.coins) || 0
+      const currentLifetime = Number(state.lifetime) || 0
+      const newCoins = currentCoins + totalClaimedCoins
+      const newLifetime = currentLifetime + totalClaimedCoins
+
+      const updatedState = {
+        ...state,
+        coins: newCoins,
+        lifetime: newLifetime,
+        lastClaimDay: dayOf(now),
+        owned: updatedOwned,
+        history: updatedHistory,
+      }
+
+      // 5. Update game_states within the same transaction
+      await sql`
+        UPDATE game_states
+        SET state = ${JSON.stringify(updatedState)}::jsonb,
+            updated_at = now()
+        WHERE user_id = ${uid}
+      `
 
       return {
-        ...o,
-        claimed: match.dayToClaim,
-        lastClaimAt: now,
+        totalClaimedCoins,
+        claimedCount: eligibleToClaim.length,
+        claimLogs,
+        updatedState,
       }
     })
-
-    const existingHistory = Array.isArray(state.history) ? state.history : []
-    const updatedHistory = [...newHistoryEntries, ...existingHistory]
-
-    // 4. Update coins & lifetime in state
-    const currentCoins = Number(state.coins) || 0
-    const currentLifetime = Number(state.lifetime) || 0
-    const newCoins = currentCoins + totalClaimedCoins
-    const newLifetime = currentLifetime + totalClaimedCoins
-
-    const updatedState = {
-      ...state,
-      coins: newCoins,
-      lifetime: newLifetime,
-      lastClaimDay: today,
-      owned: updatedOwned,
-      history: updatedHistory,
-    }
-
-    // 5. Persist to DB atomically
-    await db`
-      UPDATE game_states
-      SET state = ${JSON.stringify(updatedState)}::jsonb,
-          updated_at = now()
-      WHERE user_id = ${uid}
-    `
 
     // 6. Fetch authoritative balance after claim
     const summary = await getUserWalletSummary(uid)
 
-    console.log(`[ClaimAPI] User ${uid} claimed ₹${totalClaimedCoins} across ${eligibleToClaim.length} plan(s). New balance: ₹${summary.availableBalance}`)
+    console.log(`[ClaimAPI] User ${uid} claimed ₹${txResult.totalClaimedCoins} across ${txResult.claimedCount} plan(s). New balance: ₹${summary.availableBalance}`)
 
     return NextResponse.json({
       success: true,
-      claimedCoins: totalClaimedCoins,
-      claimedCount: eligibleToClaim.length,
+      claimedCoins: txResult.totalClaimedCoins,
+      claimedCount: txResult.claimedCount,
       availableBalance: summary.availableBalance,
-      claims: claimLogs,
-      message: `🎉 Successfully claimed ₹${totalClaimedCoins} daily returns!`,
+      claims: txResult.claimLogs,
+      serverState: txResult.updatedState,
+      message: `🎉 Successfully claimed ₹${txResult.totalClaimedCoins} daily returns!`,
     })
   } catch (err: unknown) {
+    if (err instanceof ClaimError) {
+      return NextResponse.json({ success: false, error: err.message }, { status: err.statusCode })
+    }
+
+    // Postgres unique constraint violation error code 23505
+    if (typeof err === "object" && err !== null && "code" in err && (err as any).code === "23505") {
+      return NextResponse.json({
+        success: false,
+        error: "Today's reward for this plan has already been claimed.",
+      }, { status: 400 })
+    }
+
     console.error("[Daily Claim API Error]:", err)
     const msg = err instanceof Error ? err.message : "Failed to claim rewards"
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return NextResponse.json({ success: false, error: msg }, { status: 500 })
   }
 }
