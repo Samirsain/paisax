@@ -77,6 +77,10 @@ export default function MyPlansPage() {
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
+        if (data.serverState && typeof applyServerState === "function") {
+          applyServerState(data.serverState)
+        }
+        await syncWithServer().catch(() => {})
         throw new Error(data.message || data.error || "Failed to claim rewards")
       }
 
@@ -91,6 +95,7 @@ export default function MyPlansPage() {
       toast.success(data.message || `🎉 Claimed ₹${fmt(data.claimedCoins)} from daily solar returns!`)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Claim failed")
+      await syncWithServer().catch(() => {})
     } finally {
       setClaimingAll(false)
     }
@@ -110,6 +115,10 @@ export default function MyPlansPage() {
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
+        if (data.serverState && typeof applyServerState === "function") {
+          applyServerState(data.serverState)
+        }
+        await syncWithServer().catch(() => {})
         throw new Error(data.message || data.error || "Failed to claim reward")
       }
 
@@ -127,6 +136,7 @@ export default function MyPlansPage() {
       toast.success(data.message || `🎉 Claimed ₹${fmt(data.claimedCoins)} from ${targetPlan?.name || "plan"}!`)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Claim failed")
+      await syncWithServer().catch(() => {})
     } finally {
       setClaimingPlanId(null)
     }

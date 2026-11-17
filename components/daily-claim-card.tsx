@@ -88,6 +88,10 @@ export function DailyClaimCard() {
       const data = await res.json()
 
       if (!res.ok || !data.success) {
+        if (data.serverState && typeof applyServerState === "function") {
+          applyServerState(data.serverState)
+        }
+        await syncWithServer().catch(() => {})
         throw new Error(data.error || data.message || "Failed to claim rewards")
       }
 
@@ -104,6 +108,7 @@ export function DailyClaimCard() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Claim failed"
       toast.error(msg)
+      await syncWithServer().catch(() => {})
     } finally {
       setClaiming(false)
     }

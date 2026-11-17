@@ -217,7 +217,58 @@ export async function GET() {
       console.warn("[Sync GET] Gift card reconcile warning:", giftReconcileErr)
     }
 
-    // 8. Ensure serverState.coins matches authoritative ledger balance (commissions + gift cards + recharges + claims - withdrawals)
+    // 8. Active Reconcile: Reconcile daily claims from daily_claims table
+    // Ensures owned plans' claimed count and lastClaimAt always reflect database truth
+    try {
+      const claims = await db`
+        SELECT id, plan_instance_id, plan_id, day_number, amount, claim_date, created_at
+        FROM daily_claims
+        WHERE user_id = ${uid} AND status = 'SUCCESS'
+        ORDER BY created_at ASC
+      `.catch(() => [])
+
+      // Update owned plans using daily_claims
+      for (const o of serverState.owned) {
+        if (!o) continue
+        const matchingClaims = claims.filter(
+          (c: any) => c.plan_instance_id === o.id || (!o.id && c.plan_id === o.planId)
+        )
+        if (matchingClaims.length > 0) {
+          const maxClaimedDay = Math.max(...matchingClaims.map((c: any) => Number(c.day_number) || 0))
+          const maxClaimAt = Math.max(...matchingClaims.map((c: any) => new Date(c.created_at).getTime()))
+          if ((Number(o.claimed) || 0) < maxClaimedDay) {
+            o.claimed = maxClaimedDay
+            stateModified = true
+          }
+          if ((Number(o.lastClaimAt) || 0) < maxClaimAt) {
+            o.lastClaimAt = maxClaimAt
+            stateModified = true
+          }
+        }
+      }
+
+      // Ensure every daily claim exists in serverState.history
+      for (const cl of claims) {
+        const claimHistId = cl.id
+        const alreadyInHistory = serverState.history.some((h: any) => h?.id === claimHistId)
+        if (!alreadyInHistory) {
+          serverState.history.unshift({
+            id: claimHistId,
+            at: cl.created_at ? new Date(cl.created_at).getTime() : Date.now(),
+            coins: Number(cl.amount) || 0,
+            kind: "claim",
+            planId: cl.plan_id,
+            day: Number(cl.day_number) || 1,
+          })
+          stateModified = true
+          console.log(`[Sync GET] Reconciled daily claim ${claimHistId} (₹${cl.amount}) for user ${uid}`)
+        }
+      }
+    } catch (claimReconcileErr) {
+      console.warn("[Sync GET] Daily claims reconcile warning:", claimReconcileErr)
+    }
+
+    // 9. Ensure serverState.coins matches authoritative ledger balance (commissions + gift cards + recharges + claims - withdrawals)
     try {
       const summary = await getUserWalletSummary(uid)
       if (Number(serverState.coins) !== summary.availableBalance) {
@@ -322,9 +373,31 @@ export async function POST(req: NextRequest) {
         ownedMap.set(key, co)
       }
     }
+
+    // Safety check against relational daily_claims table:
+    // A plan's claimed count and lastClaimAt can NEVER regress below records in daily_claims
+    const dbClaims = await db`
+      SELECT plan_instance_id, plan_id, day_number, amount, claim_date, created_at
+      FROM daily_claims
+      WHERE user_id = ${uid} AND status = 'SUCCESS'
+    `.catch(() => [])
+
+    for (const o of ownedMap.values()) {
+      if (!o) continue
+      const matchingClaims = dbClaims.filter(
+        (c: any) => c.plan_instance_id === o.id || (!o.id && c.plan_id === o.planId)
+      )
+      if (matchingClaims.length > 0) {
+        const maxClaimedDay = Math.max(...matchingClaims.map((c: any) => Number(c.day_number) || 0))
+        const maxClaimAt = Math.max(...matchingClaims.map((c: any) => new Date(c.created_at).getTime()))
+        o.claimed = Math.max(Number(o.claimed) || 0, maxClaimedDay)
+        o.lastClaimAt = Math.max(Number(o.lastClaimAt) || 0, maxClaimAt) || null
+      }
+    }
+
     const sanitizedOwned = Array.from(ownedMap.values())
 
-    // 4. Merge history to ensure server-side commissions, gift cards, and withdrawals are never lost
+    // 4. Merge history to ensure server-side commissions, gift cards, claims, and withdrawals are never lost
     const clientHistory = Array.isArray(state.history) ? state.history : []
     const serverHistory = Array.isArray(currentServerState.history) ? currentServerState.history : []
     const clientHistoryIds = new Set(clientHistory.map((h: any) => h?.id))
@@ -333,10 +406,31 @@ export async function POST(req: NextRequest) {
       (sh: any) =>
         sh &&
         !clientHistoryIds.has(sh.id) &&
-        (sh.kind === "commission" || sh.kind === "giftcard" || sh.kind === "withdraw" || sh.id?.startsWith("BUY_"))
+        (sh.kind === "commission" ||
+          sh.kind === "giftcard" ||
+          sh.kind === "withdraw" ||
+          sh.kind === "claim" ||
+          sh.id?.startsWith("BUY_") ||
+          sh.id?.startsWith("CLM_"))
     )
 
-    const mergedHistory = [...preservedServerEntries, ...clientHistory]
+    let mergedHistory = [...preservedServerEntries, ...clientHistory]
+
+    // Ensure all DB daily claims are present in mergedHistory
+    const mergedHistoryIds = new Set(mergedHistory.map((h: any) => h?.id))
+    for (const cl of dbClaims) {
+      if (!mergedHistoryIds.has(cl.id)) {
+        mergedHistory.unshift({
+          id: cl.id,
+          at: cl.created_at ? new Date(cl.created_at).getTime() : Date.now(),
+          coins: Number(cl.amount) || 0,
+          kind: "claim",
+          planId: cl.plan_id,
+          day: Number(cl.day_number) || 1,
+        })
+        mergedHistoryIds.add(cl.id)
+      }
+    }
 
     // 5. Authoritative Balance: Prevent client from inflating coins or overriding withdrawal deductions
     const summary = await getUserWalletSummary(uid)

@@ -7,10 +7,12 @@ import { getUserWalletSummary } from "@/lib/wallet-ledger"
 
 class ClaimError extends Error {
   statusCode: number
-  constructor(message: string, statusCode = 400) {
+  serverState?: any
+  constructor(message: string, statusCode = 400, serverState?: any) {
     super(message)
     this.name = "ClaimError"
     this.statusCode = statusCode
+    this.serverState = serverState
   }
 }
 
@@ -148,7 +150,66 @@ export async function POST(req: NextRequest) {
       }
 
       if (eligibleToClaim.length === 0) {
-        throw new ClaimError("Daily Amount Not Available. Next payout cycle starts at midnight.", 400)
+        // Reconcile owned plans with daily_claims table so stale state is fixed immediately
+        const allUserClaims = await sql`
+          SELECT plan_instance_id, plan_id, day_number, amount, claim_date, created_at
+          FROM daily_claims
+          WHERE user_id = ${uid} AND status = 'SUCCESS'
+        `
+        let fixedAny = false
+        const reconciledOwned = owned.map((o) => {
+          const matching = allUserClaims.filter(
+            (c: any) => c.plan_instance_id === o.id || (!o.id && c.plan_id === o.planId)
+          )
+          if (matching.length > 0) {
+            const maxClaimDay = Math.max(...matching.map((c: any) => Number(c.day_number) || 0))
+            const maxClaimTime = Math.max(...matching.map((c: any) => new Date(c.created_at).getTime()))
+            if ((Number(o.claimed) || 0) < maxClaimDay || (Number(o.lastClaimAt) || 0) < maxClaimTime) {
+              fixedAny = true
+              return {
+                ...o,
+                claimed: Math.max(Number(o.claimed) || 0, maxClaimDay),
+                lastClaimAt: Math.max(Number(o.lastClaimAt) || 0, maxClaimTime),
+              }
+            }
+          }
+          return o
+        })
+
+        // Also ensure all claims exist in history
+        const existingHistory = Array.isArray(state.history) ? [...state.history] : []
+        const historyIds = new Set(existingHistory.map((h: any) => h?.id))
+        for (const cl of allUserClaims) {
+          if (!historyIds.has(cl.id)) {
+            existingHistory.unshift({
+              id: cl.id,
+              at: cl.created_at ? new Date(cl.created_at).getTime() : Date.now(),
+              coins: Number(cl.amount) || 0,
+              kind: "claim",
+              planId: cl.plan_id,
+              day: Number(cl.day_number) || 1,
+            })
+            historyIds.add(cl.id)
+            fixedAny = true
+          }
+        }
+
+        const reconciledState = {
+          ...state,
+          owned: reconciledOwned,
+          history: existingHistory,
+        }
+
+        if (fixedAny) {
+          await sql`
+            UPDATE game_states
+            SET state = ${JSON.stringify(reconciledState)}::jsonb,
+                updated_at = now()
+            WHERE user_id = ${uid}
+          `
+        }
+
+        throw new ClaimError("Daily Amount Not Available. Next payout cycle starts at midnight.", 400, reconciledState)
       }
 
       // 3. Apply claims atomically
@@ -251,7 +312,11 @@ export async function POST(req: NextRequest) {
     })
   } catch (err: unknown) {
     if (err instanceof ClaimError) {
-      return NextResponse.json({ success: false, error: err.message }, { status: err.statusCode })
+      return NextResponse.json({
+        success: false,
+        error: err.message,
+        serverState: err.serverState || null,
+      }, { status: err.statusCode })
     }
 
     // Postgres unique constraint violation error code 23505

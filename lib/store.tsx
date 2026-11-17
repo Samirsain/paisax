@@ -174,7 +174,14 @@ export async function syncWithServer() {
         const currentOwnedList = Array.isArray(currentState.owned) ? currentState.owned : []
         const ownedMap = new Map<string, any>()
         for (const so of serverOwnedList) {
-          ownedMap.set(so.id || so.planId, so)
+          const key = so.id || so.planId
+          const co = currentOwnedList.find((c: any) => (c.id && c.id === so.id) || (!c.id && c.planId === so.planId))
+          ownedMap.set(key, {
+            ...so,
+            claimed: Math.max(Number(so.claimed) || 0, Number(co?.claimed) || 0),
+            lastClaimAt: Math.max(Number(so.lastClaimAt) || 0, Number(co?.lastClaimAt) || 0) || null,
+            status: so.status || co?.status || "active",
+          })
         }
         for (const co of currentOwnedList) {
           const key = co.id || co.planId
@@ -182,6 +189,18 @@ export async function syncWithServer() {
             ownedMap.set(key, co)
           }
         }
+
+        // Merge history preserving both server and local unique entries
+        const srvHistory = Array.isArray(srv.history) ? srv.history : []
+        const localHistory = Array.isArray(currentState.history) ? currentState.history : []
+        const histMap = new Map<string, any>()
+        for (const h of srvHistory) {
+          if (h?.id) histMap.set(h.id, h)
+        }
+        for (const h of localHistory) {
+          if (h?.id && !histMap.has(h.id)) histMap.set(h.id, h)
+        }
+        const mergedHist = Array.from(histMap.values()).sort((a, b) => (Number(b?.at) || 0) - (Number(a?.at) || 0))
 
         nextState = {
           ...nextState,
@@ -192,7 +211,7 @@ export async function syncWithServer() {
           bestStreak: Number(srv.bestStreak) || 0,
           inviteCode: data.user?.inviteCode || srv.inviteCode || nextState.inviteCode,
           owned: Array.from(ownedMap.values()),
-          history: Array.isArray(srv.history) ? srv.history : [],
+          history: mergedHist,
         }
         updated = true
       }

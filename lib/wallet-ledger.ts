@@ -139,28 +139,43 @@ export async function getUserWalletSummary(userId: string): Promise<UserWalletSu
     else mainAdminAdj += amt
   }
 
-  // 7. Game state (daily claims, welcomes, check-ins)
+  // 7. Relational Daily Claims (authoritative DB records)
+  const [claimRow] = await db`
+    SELECT COALESCE(SUM(amount), 0) as total
+    FROM daily_claims
+    WHERE user_id = ${userId} AND status = 'SUCCESS'
+  `.catch(() => [{ total: 0 }])
+  const dbClaimsTotal = Number(claimRow?.total) || 0
+
+  // 8. Game state (daily claims, welcomes, check-ins)
   const [gsRow] = await db`
     SELECT state FROM game_states WHERE user_id = ${userId} LIMIT 1
   `.catch(() => [undefined])
 
   const state = parseGameState(gsRow?.state)
 
-  let gameEarned = 0
+  let historyClaims = 0
+  let otherGameEarned = 0
   let historyWalletBuys = 0
 
   if (Array.isArray(state.history)) {
     for (const h of state.history) {
       if (!h) continue
       const c = Number(h.coins) || 0
-      // Legitimate gameplay earnings (claim, checkin, welcome, invite). Exclude orders or refund/comm duplicates
       if (
-        (h.kind === "claim" || h.kind === "checkin" || h.kind === "welcome" || h.kind === "invite") &&
+        h.kind === "claim" &&
         c > 0 &&
         !String(h.id || "").startsWith("REF_") &&
         !String(h.id || "").startsWith("ORD_")
       ) {
-        gameEarned += c
+        historyClaims += c
+      } else if (
+        (h.kind === "checkin" || h.kind === "welcome" || h.kind === "invite") &&
+        c > 0 &&
+        !String(h.id || "").startsWith("REF_") &&
+        !String(h.id || "").startsWith("ORD_")
+      ) {
+        otherGameEarned += c
       }
 
       // If state history has wallet plan buys not captured in DB orders table
@@ -169,6 +184,9 @@ export async function getUserWalletSummary(userId: string): Promise<UserWalletSu
       }
     }
   }
+
+  const effectiveClaims = Math.max(dbClaimsTotal, historyClaims)
+  const gameEarned = effectiveClaims + otherGameEarned
 
   const commTotal = (Number(commRow?.total) || 0) + refAdminAdj
   const giftTotal = Number(giftRow?.total) || 0
@@ -249,6 +267,7 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
   const walletBuys = await db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM orders WHERE plan_id != 'recharge' AND status = 'SUCCESS' AND txn_id = 'WALLET_BALANCE' GROUP BY user_id`.catch(() => [])
   const withs = await db`SELECT user_id, balance_type, status, COALESCE(SUM(amount), 0) as total FROM withdrawals GROUP BY user_id, balance_type, status`.catch(() => [])
   const adjs = await db`SELECT user_id, balance_type, COALESCE(SUM(amount), 0) as total FROM wallet_adjustments GROUP BY user_id, balance_type`.catch(() => [])
+  const claims = await db`SELECT user_id, COALESCE(SUM(amount), 0) as total FROM daily_claims WHERE status = 'SUCCESS' GROUP BY user_id`.catch(() => [])
 
   const gsMap = new Map<string, Record<string, any>>()
   for (const g of gameStates) gsMap.set(g.user_id, parseGameState(g.state))
@@ -295,6 +314,9 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
     else mainAdjMap.set(a.user_id, (mainAdjMap.get(a.user_id) || 0) + amt)
   }
 
+  const claimMap = new Map<string, number>()
+  for (const cl of claims) claimMap.set(cl.user_id, Number(cl.total) || 0)
+
   const userSummaryMap = new Map<string, UserWalletSummary>()
   let totalWalletBalance = 0
   let totalMainBalance = 0
@@ -310,6 +332,7 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
     const rechTotal = rechMap.get(uid) || 0
     const walletBuysTotal = walletBuysMap.get(uid) || 0
     const mainAdminAdj = mainAdjMap.get(uid) || 0
+    const dbClaimsTotal = claimMap.get(uid) || 0
 
     const mainPendingWithdrawn = mainPendingMap.get(uid) || 0
     const mainApprovedWithdrawn = mainApprovedMap.get(uid) || 0
@@ -321,7 +344,8 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
     const refRejectedWithdrawn = refRejectedMap.get(uid) || 0
     const refWithdrawnTotal = refPendingWithdrawn + refApprovedWithdrawn
 
-    let gameEarned = 0
+    let historyClaims = 0
+    let otherGameEarned = 0
     let historyWalletBuys = 0
 
     if (Array.isArray(state.history)) {
@@ -329,12 +353,19 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
         if (!h) continue
         const c = Number(h.coins) || 0
         if (
-          (h.kind === "claim" || h.kind === "checkin" || h.kind === "welcome" || h.kind === "invite") &&
+          h.kind === "claim" &&
           c > 0 &&
           !String(h.id || "").startsWith("REF_") &&
           !String(h.id || "").startsWith("ORD_")
         ) {
-          gameEarned += c
+          historyClaims += c
+        } else if (
+          (h.kind === "checkin" || h.kind === "welcome" || h.kind === "invite") &&
+          c > 0 &&
+          !String(h.id || "").startsWith("REF_") &&
+          !String(h.id || "").startsWith("ORD_")
+        ) {
+          otherGameEarned += c
         }
 
         if (h.kind === "buy" && c < 0 && !String(h.id || "").startsWith("ORD_")) {
@@ -342,6 +373,9 @@ export async function getAllUsersWalletSummary(): Promise<AllUsersWalletSummary>
         }
       }
     }
+
+    const effectiveClaims = Math.max(dbClaimsTotal, historyClaims)
+    const gameEarned = effectiveClaims + otherGameEarned
 
     const totalPlanBuys = walletBuysTotal + historyWalletBuys
     const mainTotalEarned = rechTotal + giftTotal + gameEarned + mainAdminAdj
