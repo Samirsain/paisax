@@ -67,10 +67,19 @@ export async function GET() {
       LIMIT 100
     `.catch(() => [])
 
+    // 6. Fetch daily claims from daily_claims table
+    const dailyClaims = await db`
+      SELECT id, plan_id, day_number, amount, claim_date, status, created_at
+      FROM daily_claims
+      WHERE user_id = ${uid} AND status = 'SUCCESS'
+      ORDER BY created_at DESC
+      LIMIT 200
+    `.catch(() => [])
+
     // Normalize all records into a unified list
     const list: Array<{
       id: string
-      type: "deposit" | "withdrawal" | "commission" | "giftcard"
+      type: "deposit" | "withdrawal" | "commission" | "giftcard" | "claim"
       title: string
       amount: number
       netAmount?: number
@@ -174,6 +183,30 @@ export async function GET() {
         date: a.created_at,
         timestamp: new Date(a.created_at).getTime(),
         reference: a.id,
+      })
+    }
+
+    // Map daily claims
+    const claimIds = new Set(list.map((t) => t.id))
+    for (const dc of dailyClaims) {
+      if (claimIds.has(dc.id)) continue
+      const planNames: Record<string, string> = {
+        free: "Free Solar Trial",
+        solar_300: "Solar Starter 300",
+        solar_1000: "Solar Pro Grid 1000",
+        solar_2000: "Solar Mega Station 2000",
+        solar_10000: "Solar Industrial Plant",
+        solar_50000: "Solar Megawatt Farm",
+      }
+      list.push({
+        id: dc.id,
+        type: "claim" as any,
+        title: `Daily Return · ${planNames[dc.plan_id] || dc.plan_id} (Day ${dc.day_number})`,
+        amount: Number(dc.amount) || 0,
+        status: "SUCCESS",
+        date: dc.created_at,
+        timestamp: new Date(dc.created_at).getTime(),
+        reference: dc.id,
       })
     }
 

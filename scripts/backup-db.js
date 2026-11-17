@@ -45,3 +45,4 @@ const db = postgres(process.env.DATABASE_URL, { ssl: 'require' });
   console.error("Backup failed:", e);
   process.exit(1);
 });
+

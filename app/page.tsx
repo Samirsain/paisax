@@ -10,19 +10,17 @@ import {
   GiftIcon,
   Share2Icon,
   ShieldCheckIcon,
-  ShoppingCartIcon,
   StarIcon,
-  TrendingUpIcon,
   WalletIcon,
-  ZapIcon,
   SendIcon,
 } from "lucide-react"
 import { BuySheet } from "@/components/buy-sheet"
 import { WelcomeModal } from "@/components/welcome-modal"
 import { WelcomeBonusCard } from "@/components/welcome-bonus-card"
+import { DailyClaimCard } from "@/components/daily-claim-card"
 import { RecentWithdrawalActivity } from "@/components/recent-withdrawal-activity"
 import { Skeleton } from "@/components/marks"
-import { PLANS, active, ready, getPlan, type Plan, type PlanId } from "@/lib/game"
+import { PLANS, type Plan, type PlanId } from "@/lib/game"
 import { fmt, useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -235,36 +233,8 @@ export default function HomePage() {
         </a>
       </div>
 
-      {/* ── DAILY RETURNS WAITING ALERT (When 1+ active plans are ready) ── */}
-      {(() => {
-        const duePlans = ready(state, now)
-        if (duePlans.length === 0) return null
-        const dueCoins = duePlans.reduce((sum, o) => sum + getPlan(o.planId).perDay, 0)
-        return (
-          <Link
-            href="/my-plans"
-            className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 p-3.5 shadow-md shadow-amber-500/20 active:scale-98 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-slate-950 text-amber-400 font-black shadow-xs shrink-0">
-                <ZapIcon className="size-5" />
-              </span>
-              <div>
-                <p className="text-xs font-black text-slate-950">
-                  Daily Solar Income Ready!
-                </p>
-                <p className="text-xs font-bold text-amber-950">
-                  ₹{fmt(dueCoins)} waiting to claim ({duePlans.length} plan{duePlans.length > 1 ? "s" : ""})
-                </p>
-              </div>
-            </div>
-
-            <span className="rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-black text-amber-300 shadow-xs whitespace-nowrap">
-              Claim Now →
-            </span>
-          </Link>
-        )
-      })()}
+      {/* ── DAILY CLAIM CARD (Claim all plans directly from Home) ── */}
+      <DailyClaimCard />
 
       {/* ── ₹200 WELCOME BONUS COLLECTION CARD ────────────────────────── */}
       <WelcomeBonusCard />
